@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CHR Tracker">
+    <title>CHR Tracking System - Phase 1</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-box">
+            <h2>CHR Tracking System</h2>
+            <form id="loginForm">
+                <input type="password" id="pinInput" maxlength="6" placeholder="Enter PIN" autocomplete="off" inputmode="numeric" pattern="[0-9]*">
+                <button type="submit">Unlock</button>
+            </form>
+            <p class="login-help">Contact IT if you forgot your PIN</p>
+        </div>
+    </div>
+
+    <div id="app">
+        <!-- Dashboard View -->
+        <div id="dashboard" class="view active">
+            <header>
+                <h1>CHR Dashboard</h1>
+                <button id="lockBtn" class="lock-btn">🔒 Lock</button>
+            </header>
+            
+            <div class="date-display">
+                <p id="currentDate"></p>
+            </div>
+
+            <!-- Alert Section -->
+            <div id="alertsSection" class="alerts-section">
+                <!-- Alerts will be populated dynamically -->
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Participants</h3>
+                    <p class="stat-number" id="totalParticipants">0</p>
+                    <small>Goal: 75</small>
+                </div>
+                <div class="stat-card">
+                    <h3>Today's Encounters</h3>
+                    <p class="stat-number" id="todayEncounters">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Needles Distributed</h3>
+                    <p class="stat-number" id="needlesOut">0</p>
+                    <small>Goal: 50,000</small>
+                </div>
+                <div class="stat-card">
+                    <h3>Needles Returned</h3>
+                    <p class="stat-number" id="needlesIn">0</p>
+                    <small>Goal: 75,000</small>
+                </div>
+            </div>
+
+            <div class="menu-grid">
+                <button class="menu-btn primary" onclick="showView('enrollment')">
+                    👤 New Enrollment
+                </button>
+                <button class="menu-btn primary" onclick="showView('encounter')">
+                    📋 Log Encounter
+                </button>
+                <button class="menu-btn" onclick="showView('kits')">
+                    📦 Distribute Kit
+                </button>
+                <button class="menu-btn" onclick="showView('inventory')">
+                    📊 Inventory
+                </button>
+                <button class="menu-btn" onclick="showView('testing')">
+                    🧪 Testing
+                </button>
+                <button class="menu-btn" onclick="showView('referrals')">
+                    🔗 Referrals
+                </button>
+                <button class="menu-btn" onclick="showView('reports')">
+                    📈 Reports
+                </button>
+                <button class="menu-btn" onclick="showView('settings')">
+                    ⚙️ Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Enrollment View -->
+        <div id="enrollment" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>New Participant Enrollment</h2>
+            </header>
+            <form id="enrollmentForm" class="data-form">
+                <div class="form-group">
+                    <label>First Name *</label>
+                    <input type="text" id="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" id="lastName" required>
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth *</label>
+                    <input type="date" id="dob" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="phone">
+                </div>
+                <div class="form-group">
+                    <label>Services Interested In</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" value="NEP"> Needle Exchange</label>
+                        <label><input type="checkbox" value="HIV"> HIV Testing</label>
+                        <label><input type="checkbox" value="HCV"> HCV Testing</label>
+                        <label><input type="checkbox" value="STD"> STD Testing</label>
+                        <label><input type="checkbox" value="Treatment"> Treatment Referral</label>
+                        <label><input type="checkbox" value="Social"> Social Services</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="agreementSigned" required>
+                        Patient Agreement Signed (Drug-Free Zone) *
+                    </label>
+                </div>
+                <button type="submit" class="btn-primary">Enroll Participant</button>
+            </form>
+        </div>
+
+        <!-- Encounter View -->
+        <div id="encounter" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Log Encounter</h2>
+            </header>
+            <form id="encounterForm" class="data-form">
+                <div class="form-group">
+                    <label>Participant *</label>
+                    <select id="encounterParticipant" required>
+                        <option value="">Select Participant...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date & Time *</label>
+                    <input type="datetime-local" id="encounterDateTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Services Provided</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" class="service-check" value="NEP"> Needle Exchange</label>
+                        <label><input type="checkbox" class="service-check" value="Counseling"> Harm Reduction Counseling</label>
+                        <label><input type="checkbox" class="service-check" value="Education"> Educational Materials</label>
+                        <label><input type="checkbox" class="service-check" value="Naloxone"> Naloxone Kit</label>
+                        <label><input type="checkbox" class="service-check" value="Testing"> Testing</label>
+                        <label><input type="checkbox" class="service-check" value="Condoms"> Condoms/Safe Sex Kit</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Needles/Syringes Distributed</label>
+                    <input type="number" id="needlesOut" min="0" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Needles/Syringes Returned</label>
+                    <input type="number" id="needlesIn" min="0" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Naloxone Kits Given</label>
+                    <input type="number" id="naloxoneGiven" min="0" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Condoms Given</label>
+                    <input type="number" id="condomsGiven" min="0" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="encounterNotes" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Staff Initials *</label>
+                    <input type="text" id="staffInitials" maxlength="3" required>
+                </div>
+                <button type="submit" class="btn-primary">Save Encounter</button>
+            </form>
+        </div>
+
+        <!-- Kits View (NEW) -->
+        <div id="kits" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Distribute Pre-Packaged Kit</h2>
+            </header>
+
+            <div class="kit-status-section">
+                <h3>Kit Inventory Status</h3>
+                <div id="kitStatusDisplay">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <form id="kitDistributionForm" class="data-form">
+                <div class="form-group">
+                    <label>Participant *</label>
+                    <select id="kitParticipant" required>
+                        <option value="">Select Participant...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Kit Type *</label>
+                    <select id="kitType" required>
+                        <option value="">Select Kit...</option>
+                        <option value="Kit A">Kit A - Basic Harm Reduction</option>
+                        <option value="Kit B">Kit B - Overdose Prevention</option>
+                        <option value="Kit C">Kit C - Safe Sex</option>
+                        <option value="Kit D">Kit D - Wound Care</option>
+                        <option value="Kit E">Kit E - Personal Hygiene</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Quantity *</label>
+                    <input type="number" id="kitQuantity" min="1" value="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="kitNotes" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Staff Initials *</label>
+                    <input type="text" id="kitStaffInitials" maxlength="3" required>
+                </div>
+                <button type="submit" class="btn-primary">Distribute Kit</button>
+            </form>
+
+            <div class="kit-info">
+                <h3>Kit Contents Reference</h3>
+                <div class="kit-details">
+                    <details>
+                        <summary><strong>Kit A - Basic Harm Reduction</strong></summary>
+                        <ul>
+                            <li>10 sterile needles/syringes</li>
+                            <li>5 alcohol prep pads</li>
+                            <li>2 fentanyl test strips</li>
+                            <li>1 xylazine test strip</li>
+                            <li>2 sterile water vials</li>
+                            <li>2 cotton pellets</li>
+                            <li>1 cooker</li>
+                            <li>2 filters</li>
+                            <li>1 tourniquet</li>
+                            <li>2 condoms</li>
+                            <li>1 lubricant packet</li>
+                            <li>1 disposal box</li>
+                            <li>Educational materials</li>
+                        </ul>
+                    </details>
+                    <details>
+                        <summary><strong>Kit B - Overdose Prevention</strong></summary>
+                        <ul>
+                            <li>1 naloxone 4mg nasal spray (2 doses)</li>
+                            <li>1 CPR face shield</li>
+                            <li>5 fentanyl test strips</li>
+                            <li>3 xylazine test strips</li>
+                            <li>1 benzo test strip</li>
+                            <li>Overdose prevention card</li>
+                            <li>Educational materials</li>
+                            <li>Drawstring backpack</li>
+                        </ul>
+                    </details>
+                    <details>
+                        <summary><strong>Kit C - Safe Sex</strong></summary>
+                        <ul>
+                            <li>10 condoms (5 normal, 5 large)</li>
+                            <li>2 dental dams</li>
+                            <li>5 lubricant packets</li>
+                            <li>Safe sex instruction card</li>
+                            <li>STD testing info</li>
+                            <li>HIV/HCV info</li>
+                        </ul>
+                    </details>
+                    <details>
+                        <summary><strong>Kit D - Wound Care</strong></summary>
+                        <ul>
+                            <li>10 band aids</li>
+                            <li>2 knuckle bandages</li>
+                            <li>5 antiseptic towelettes</li>
+                            <li>1 medical tape roll</li>
+                            <li>2 finger cots</li>
+                            <li>2 hand wipes</li>
+                            <li>1 lip ointment</li>
+                            <li>Wound care instructions</li>
+                        </ul>
+                    </details>
+                    <details>
+                        <summary><strong>Kit E - Personal Hygiene</strong></summary>
+                        <ul>
+                            <li>1 toothbrush</li>
+                            <li>1 toothpaste</li>
+                            <li>2 shampoo/conditioner packets</li>
+                            <li>2 washcloths</li>
+                            <li>1 deodorant</li>
+                            <li>2 lip balm</li>
+                            <li>1 hand sanitizer</li>
+                            <li>2 feminine hygiene products</li>
+                            <li>Drawstring backpack</li>
+                        </ul>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory View (ENHANCED) -->
+        <div id="inventory" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Inventory Management</h2>
+            </header>
+
+            <div class="inventory-controls">
+                <div class="form-group">
+                    <label>Filter by Category</label>
+                    <select id="inventoryCategory">
+                        <option value="all">All Categories</option>
+                        <option value="harm-reduction">Harm Reduction Supplies</option>
+                        <option value="overdose">Overdose Prevention</option>
+                        <option value="safe-sex">Safe Sex Supplies</option>
+                        <option value="testing">Testing Supplies</option>
+                        <option value="wound-care">Wound Care</option>
+                        <option value="hygiene">Hygiene & Personal Care</option>
+                        <option value="feminine">Feminine Hygiene</option>
+                        <option value="disposal">Disposal & Safety</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Show</label>
+                    <select id="inventoryFilter">
+                        <option value="all">All Items</option>
+                        <option value="alerts">Alerts Only</option>
+                        <option value="critical">Critical Only</option>
+                        <option value="low">Low Stock Only</option>
+                    </select>
+                </div>
+                <input type="text" id="inventorySearch" class="search-box" placeholder="Search items...">
+            </div>
+
+            <div id="inventoryList" class="inventory-list">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Testing View -->
+        <div id="testing" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Testing & Treatment</h2>
+            </header>
+            <form id="testingForm" class="data-form">
+                <div class="form-group">
+                    <label>Participant *</label>
+                    <select id="testParticipant" required>
+                        <option value="">Select Participant...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Test Type *</label>
+                    <select id="testType" required>
+                        <option value="">Select Test...</option>
+                        <option value="HIV">HIV</option>
+                        <option value="HCV">HCV</option>
+                        <option value="HBV">HBV</option>
+                        <option value="STD">STD</option>
+                        <option value="TB">TB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Test Date *</label>
+                    <input type="date" id="testDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Result</label>
+                    <select id="testResult">
+                        <option value="Pending">Pending</option>
+                        <option value="Negative">Negative</option>
+                        <option value="Positive">Positive</option>
+                        <option value="Inconclusive">Inconclusive</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Treatment Started</label>
+                    <select id="treatmentStarted">
+                        <option value="N/A">N/A</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                        <option value="Referred">Referred</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="testNotes" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Save Test Record</button>
+            </form>
+
+            <div class="test-summary">
+                <h3>Testing Summary</h3>
+                <div id="testingSummary">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Referrals View -->
+        <div id="referrals" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Referral Management</h2>
+            </header>
+            <form id="referralForm" class="data-form">
+                <div class="form-group">
+                    <label>Participant *</label>
+                    <select id="referralParticipant" required>
+                        <option value="">Select Participant...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Referral To *</label>
+                    <select id="referralTo" required>
+                        <option value="">Select Partner...</option>
+                        <option value="Brightview">Brightview</option>
+                        <option value="Horizon Behavioral Health">Horizon Behavioral Health</option>
+                        <option value="Savidia">Savidia</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Service Type *</label>
+                    <select id="referralService" required>
+                        <option value="">Select Service...</option>
+                        <option value="Substance Use Treatment">Substance Use Treatment</option>
+                        <option value="Housing">Housing</option>
+                        <option value="Food Assistance">Food Assistance</option>
+                        <option value="Family Services">Family Services</option>
+                        <option value="Medical Care">Medical Care</option>
+                        <option value="Mental Health">Mental Health</option>
+                        <option value="Insurance Enrollment">Insurance Enrollment</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Referral Date *</label>
+                    <input type="date" id="referralDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Successfully Linked</label>
+                    <select id="linkedSuccessfully">
+                        <option value="Pending">Pending</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                        <option value="Unable to Contact">Unable to Contact</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="referralNotes" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Save Referral</button>
+            </form>
+
+            <div class="referral-summary">
+                <h3>Referral Summary</h3>
+                <div id="referralSummary">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports View (ENHANCED) -->
+        <div id="reports" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Reports & Analytics</h2>
+            </header>
+
+            <div class="report-controls">
+                <button onclick="generateReport('summary')" class="btn-primary">Generate Summary Report</button>
+                <button onclick="generateReport('full')" class="btn-primary">Generate Full Report</button>
+                <button onclick="exportReportPDF()" class="btn-primary">📄 Export to PDF</button>
+            </div>
+
+            <div id="reportOutput" class="report-output">
+                <p>Select a report type above to generate...</p>
+            </div>
+        </div>
+
+        <!-- Settings View (NEW) -->
+        <div id="settings" class="view">
+            <header>
+                <button onclick="showView('dashboard')" class="back-btn">← Back</button>
+                <h2>Settings & Data Management</h2>
+            </header>
+
+            <div class="settings-section">
+                <h3>Data Backup & Restore</h3>
+                <div class="backup-controls">
+                    <button onclick="backupData()" class="btn-primary">💾 Backup All Data</button>
+                    <button onclick="document.getElementById('restoreFile').click()" class="btn-primary">📥 Restore from Backup</button>
+                    <input type="file" id="restoreFile" accept=".json" style="display: none;" onchange="restoreData(event)">
+                </div>
+                <div id="backupStatus" class="backup-status">
+                    <!-- Status messages will appear here -->
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>Alert Thresholds</h3>
+                <div class="form-group">
+                    <label>Critical Alert (% remaining)</label>
+                    <input type="number" id="criticalThreshold" min="1" max="50" value="20">
+                    <small>Alert when inventory drops below this percentage</small>
+                </div>
+                <div class="form-group">
+                    <label>Low Stock Alert (% remaining)</label>
+                    <input type="number" id="lowThreshold" min="1" max="50" value="30">
+                </div>
+                <div class="form-group">
+                    <label>Reorder Alert (% remaining)</label>
+                    <input type="number" id="reorderThreshold" min="1" max="50" value="40">
+                </div>
+                <button onclick="saveThresholds()" class="btn-primary">Save Thresholds</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>App Information</h3>
+                <p><strong>Version:</strong> Phase 1.0</p>
+                <p><strong>Last Sync:</strong> <span id="lastSync">Never</span></p>
+                <p><strong>Total Records:</strong> <span id="totalRecords">0</span></p>
+            </div>
+
+            <div class="settings-section danger-zone">
+                <h3>⚠️ Danger Zone</h3>
+                <button onclick="clearAllData()" class="btn-danger">Clear All Data</button>
+                <p class="warning-text">This will permanently delete all data. Make sure you have a backup first!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
