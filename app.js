@@ -1,219 +1,110 @@
 // ============================================
-// CHR TRACKING APP - PHASE 1 - MAIN JAVASCRIPT
+// CHR TRACKING APP — v1.1
+// Participant Hub + Custom Inventory + RFID
 // ============================================
 
-// Security & Authentication
-const APP_PIN = '1234'; // CHANGE THIS TO YOUR SECURE PIN
+const APP_PIN = '1234'; // CHANGE THIS
 let isLocked = true;
 let autoLockTimeout;
+let newItemPhotoData = null; // stores base64 photo for new inventory item
 
-// Alert Thresholds (can be adjusted in settings)
-let THRESHOLDS = {
-    critical: 20,  // 20%
-    low: 30,      // 30%
-    reorder: 40   // 40%
-};
-
-// Load thresholds from localStorage if they exist
+let THRESHOLDS = { critical: 20, low: 30, reorder: 40 };
 if (localStorage.getItem('alertThresholds')) {
     THRESHOLDS = JSON.parse(localStorage.getItem('alertThresholds'));
 }
 
-// Kit Definitions
+// ── Kit Definitions ───────────────────────────────────────────
 const KITS = {
-    'Kit A': {
-        name: 'Basic Harm Reduction',
-        items: {
-            'Needles/Syringes': 10,
-            'Benzalkonium Chloride Towelettes': 5,
-            'Fentanyl Test Strip': 2,
-            'Xylazine Test Strip': 1,
-            'Airlife Sterile Water 5ml': 2,
-            'Richmond Cotton Pellets': 2,
-            '7" inch Wood Stirrers': 1,
-            'One Use Filter Pack': 2,
-            'Tourniquet': 1,
-            'Lifestyle Normal Condoms': 2,
-            'Personal Lubricant': 1,
-            'Needle Disposal Box': 1,
-            'Brown Bags': 1
-        },
-        starting: 100,
-        current: 100
-    },
-    'Kit B': {
-        name: 'Overdose Prevention',
-        items: {
-            '4mg Naloxone Nasal Spray': 1,
-            'CPR Face Shields': 1,
-            'Fentanyl Test Strip': 5,
-            'Xylazine Test Strip': 3,
-            'Benzo Test Strips': 1,
-            'Drawstring Backpack': 1
-        },
-        starting: 50,
-        current: 50
-    },
-    'Kit C': {
-        name: 'Safe Sex',
-        items: {
-            'Lifestyle Normal Condoms': 5,
-            'Lifestyle Large Condoms': 5,
-            'Dental Dam': 2,
-            'Personal Lubricant': 5,
-            '2x2 Zip Bags Resealable': 1
-        },
-        starting: 150,
-        current: 150
-    },
-    'Kit D': {
-        name: 'Wound Care',
-        items: {
-            'First Aid Sheer Band Aids': 10,
-            'Knuckle Adhesive Bandages': 2,
-            'Benzalkonium Chloride Towelettes': 5,
-            'Blue Medical Tape Rolls': 1,
-            'Finger Cots': 2,
-            'Hand Sanitizing Purell Wipes': 2,
-            'Lip Ointments': 1,
-            '2 MIL Thickness Zip Closure Bags': 1
-        },
-        starting: 75,
-        current: 75
-    },
-    'Kit E': {
-        name: 'Personal Hygiene',
-        items: {
-            'Toothbrush': 1,
-            'Gel Fluoride Toothpaste': 1,
-            'Dawnmist Shampoo and Conditioner Packets': 2,
-            'Washcloths': 2,
-            'Deodorant': 1,
-            'Lip Balm': 2,
-            'Purell Hand Sanitizing Bottles': 1,
-            'Tampax Regular': 2,
-            'Drawstring Backpack': 1
-        },
-        starting: 100,
-        current: 100
-    }
+    'Kit A': { name:'Basic Harm Reduction', starting:100, current:100, items:{'Needles/Syringes':10,'Benzalkonium Chloride Towelettes':5,'Fentanyl Test Strip':2,'Xylazine Test Strip':1,'Airlife Sterile Water 5ml':2,'Richmond Cotton Pellets':2,'7" inch Wood Stirrers':1,'One Use Filter Pack':2,'Tourniquet':1,'Lifestyle Normal Condoms':2,'Personal Lubricant':1,'Needle Disposal Box':1,'Brown Bags':1}},
+    'Kit B': { name:'Overdose Prevention',  starting:50,  current:50,  items:{'4mg Naloxone Nasal Spray':1,'CPR Face Shields':1,'Fentanyl Test Strip':5,'Xylazine Test Strip':3,'Benzo Test Strips':1,'Drawstring Backpack':1}},
+    'Kit C': { name:'Safe Sex',             starting:150, current:150, items:{'Lifestyle Normal Condoms':5,'Lifestyle Large Condoms':5,'Dental Dam':2,'Personal Lubricant':5,'2x2 Zip Bags Resealable':1}},
+    'Kit D': { name:'Wound Care',           starting:75,  current:75,  items:{'First Aid Sheer Band Aids':10,'Knuckle Adhesive Bandages':2,'Benzalkonium Chloride Towelettes':5,'Blue Medical Tape Rolls':1,'Finger Cots':2,'Hand Sanitizing Purell Wipes':2,'Lip Ointments':1,'2 MIL Thickness Zip Closure Bags':1}},
+    'Kit E': { name:'Personal Hygiene',     starting:100, current:100, items:{'Toothbrush':1,'Gel Fluoride Toothpaste':1,'Dawnmist Shampoo and Conditioner Packets':2,'Washcloths':2,'Deodorant':1,'Lip Balm':2,'Purell Hand Sanitizing Bottles':1,'Tampax Regular':2,'Drawstring Backpack':1}}
 };
 
-// Database (LocalStorage)
+// ── Default Inventory ─────────────────────────────────────────
+const DEFAULT_INVENTORY = [
+    {id:1,  name:'Needles/Syringes',                       category:'harm-reduction', starting:50000,unit:'units',   location:'Locked Cabinet A'},
+    {id:2,  name:'Tourniquet',                             category:'harm-reduction', starting:250,  unit:'each',    location:'Locked Cabinet A'},
+    {id:3,  name:'Brass Screens',                          category:'harm-reduction', starting:1000, unit:'each',    location:'Locked Cabinet A'},
+    {id:4,  name:'7" inch Wood Stirrers',                  category:'harm-reduction', starting:1000, unit:'each',    location:'Locked Cabinet A'},
+    {id:5,  name:'One Use Filter Pack',                    category:'harm-reduction', starting:4500, unit:'pack',    location:'Locked Cabinet A'},
+    {id:6,  name:'Richmond Cotton Pellets',                category:'harm-reduction', starting:13,   unit:'box',     location:'Locked Cabinet A'},
+    {id:7,  name:'Airlife Sterile Water 5ml',              category:'harm-reduction', starting:1200, unit:'vial',    location:'Locked Cabinet A'},
+    {id:8,  name:'2x2 Zip Bags Resealable',                category:'harm-reduction', starting:1000, unit:'each',    location:'Supply Room'},
+    {id:9,  name:'2 MIL Thickness Zip Closure Bags',       category:'harm-reduction', starting:1000, unit:'each',    location:'Supply Room'},
+    {id:10, name:'Brown Bags',                             category:'harm-reduction', starting:1000, unit:'each',    location:'Supply Room'},
+    {id:11, name:'4mg Naloxone Nasal Spray',               category:'overdose',       starting:100,  unit:'dose',    location:'Locked Med Cabinet'},
+    {id:12, name:'Nasal Med Trainer',                      category:'overdose',       starting:20,   unit:'each',    location:'Storage Shelf B'},
+    {id:13, name:'Fentanyl Test Strip',                    category:'overdose',       starting:200,  unit:'strip',   location:'Locked Cabinet A'},
+    {id:14, name:'Xylazine Test Strip',                    category:'overdose',       starting:300,  unit:'strip',   location:'Locked Cabinet A'},
+    {id:15, name:'Benzo Test Strips',                      category:'overdose',       starting:100,  unit:'strip',   location:'Locked Cabinet A'},
+    {id:16, name:'CPR Face Shields',                       category:'overdose',       starting:10,   unit:'each',    location:'First Aid Station'},
+    {id:17, name:'Lifestyle Normal Condoms',               category:'safe-sex',       starting:700,  unit:'each',    location:'Locked Cabinet C'},
+    {id:18, name:'Lifestyle Large Condoms',                category:'safe-sex',       starting:700,  unit:'each',    location:'Locked Cabinet C'},
+    {id:19, name:'Dental Dam',                             category:'safe-sex',       starting:100,  unit:'each',    location:'Locked Cabinet C'},
+    {id:20, name:'Personal Lubricant',                     category:'safe-sex',       starting:1008, unit:'packet',  location:'Locked Cabinet C'},
+    {id:21, name:'HIV Test Kit',                           category:'testing',        starting:100,  unit:'kit',     location:'Locked Med Cabinet'},
+    {id:22, name:'First Aid Sheer Band Aids',              category:'wound-care',     starting:1200, unit:'bandage', location:'First Aid Station'},
+    {id:23, name:'Knuckle Adhesive Bandages',              category:'wound-care',     starting:100,  unit:'bandage', location:'First Aid Station'},
+    {id:24, name:'Blue Medical Tape Rolls',                category:'wound-care',     starting:30,   unit:'roll',    location:'First Aid Station'},
+    {id:25, name:'Micropore Tape',                         category:'wound-care',     starting:100,  unit:'roll',    location:'First Aid Station'},
+    {id:26, name:'Benzalkonium Chloride Towelettes',       category:'wound-care',     starting:1000, unit:'towelette',location:'First Aid Station'},
+    {id:27, name:'Manicure Sticks',                        category:'wound-care',     starting:288,  unit:'each',    location:'First Aid Station'},
+    {id:28, name:'Finger Cots',                            category:'wound-care',     starting:144,  unit:'each',    location:'First Aid Station'},
+    {id:29, name:'Hand Sanitizing Purell Wipes',           category:'hygiene',        starting:100,  unit:'wipe',    location:'Multiple Locations'},
+    {id:30, name:'Purell Hand Sanitizing Bottles',         category:'hygiene',        starting:48,   unit:'bottle',  location:'Multiple Locations'},
+    {id:31, name:'Lip Ointments',                          category:'hygiene',        starting:1728, unit:'each',    location:'Supply Closet'},
+    {id:32, name:'Lip Balm',                               category:'hygiene',        starting:288,  unit:'each',    location:'Supply Closet'},
+    {id:33, name:'Dawnmist Shampoo and Conditioner Packets',category:'hygiene',       starting:100,  unit:'packet',  location:'Supply Closet'},
+    {id:34, name:'Washcloths',                             category:'hygiene',        starting:1152, unit:'each',    location:'Supply Closet'},
+    {id:35, name:'Fingernail Clippers',                    category:'hygiene',        starting:18,   unit:'each',    location:'Supply Closet'},
+    {id:36, name:'Deodorant',                              category:'hygiene',        starting:96,   unit:'each',    location:'Supply Closet'},
+    {id:37, name:'Toothbrush',                             category:'hygiene',        starting:144,  unit:'each',    location:'Supply Closet'},
+    {id:38, name:'Gel Fluoride Toothpaste',                category:'hygiene',        starting:144,  unit:'tube',    location:'Supply Closet'},
+    {id:39, name:'Shampoo and Hand Wash Packets',          category:'hygiene',        starting:300,  unit:'packet',  location:'Supply Closet'},
+    {id:40, name:'Tampax Regular',                         category:'feminine',       starting:80,   unit:'each',    location:'Supply Closet'},
+    {id:41, name:'Tampons',                                category:'feminine',       starting:80,   unit:'each',    location:'Supply Closet'},
+    {id:42, name:'Kotex Regular Maxi Pads',                category:'feminine',       starting:120,  unit:'each',    location:'Supply Closet'},
+    {id:43, name:'Needle Disposal Box',                    category:'disposal',       starting:200,  unit:'each',    location:'Multiple Locations'},
+    {id:44, name:'Drawstring Backpack',                    category:'disposal',       starting:50,   unit:'each',    location:'Storage Area'}
+];
+
+// ── Database ──────────────────────────────────────────────────
 const DB = {
     participants: [],
     encounters: [],
     testing: [],
     referrals: [],
     kitDistributions: [],
-    inventory: [
-        // CATEGORY 1: HARM REDUCTION SUPPLIES
-        { id: 1, name: 'Needles/Syringes', category: 'harm-reduction', starting: 50000, current: 50000, min: 10000, unit: 'units', location: 'Locked Cabinet A' },
-        { id: 2, name: 'Tourniquet', category: 'harm-reduction', starting: 250, current: 250, min: 50, unit: 'each', location: 'Locked Cabinet A' },
-        { id: 3, name: 'Brass Screens', category: 'harm-reduction', starting: 1000, current: 1000, min: 200, unit: 'each', location: 'Locked Cabinet A' },
-        { id: 4, name: '7" inch Wood Stirrers', category: 'harm-reduction', starting: 1000, current: 1000, min: 200, unit: 'each', location: 'Locked Cabinet A' },
-        { id: 5, name: 'One Use Filter Pack', category: 'harm-reduction', starting: 4500, current: 4500, min: 900, unit: 'pack', location: 'Locked Cabinet A' },
-        { id: 6, name: 'Richmond Cotton Pellets', category: 'harm-reduction', starting: 13, current: 13, min: 3, unit: 'box', location: 'Locked Cabinet A' },
-        { id: 7, name: 'Airlife Sterile Water 5ml', category: 'harm-reduction', starting: 1200, current: 1200, min: 300, unit: 'vial', location: 'Locked Cabinet A' },
-        { id: 8, name: '2x2 Zip Bags Resealable', category: 'harm-reduction', starting: 1000, current: 1000, min: 200, unit: 'each', location: 'Supply Room' },
-        { id: 9, name: '2 MIL Thickness Zip Closure Bags', category: 'harm-reduction', starting: 1000, current: 1000, min: 200, unit: 'each', location: 'Supply Room' },
-        { id: 10, name: 'Brown Bags', category: 'harm-reduction', starting: 1000, current: 1000, min: 200, unit: 'each', location: 'Supply Room' },
-        
-        // CATEGORY 2: OVERDOSE PREVENTION
-        { id: 11, name: '4mg Naloxone Nasal Spray', category: 'overdose', starting: 100, current: 100, min: 20, unit: 'dose', location: 'Locked Med Cabinet' },
-        { id: 12, name: 'Nasal Med Trainer', category: 'overdose', starting: 20, current: 20, min: 5, unit: 'each', location: 'Storage Shelf B' },
-        { id: 13, name: 'Fentanyl Test Strip', category: 'overdose', starting: 200, current: 200, min: 40, unit: 'strip', location: 'Locked Cabinet A' },
-        { id: 14, name: 'Xylazine Test Strip', category: 'overdose', starting: 300, current: 300, min: 60, unit: 'strip', location: 'Locked Cabinet A' },
-        { id: 15, name: 'Benzo Test Strips', category: 'overdose', starting: 100, current: 100, min: 20, unit: 'strip', location: 'Locked Cabinet A' },
-        { id: 16, name: 'CPR Face Shields', category: 'overdose', starting: 10, current: 10, min: 3, unit: 'each', location: 'First Aid Station' },
-        
-        // CATEGORY 3: SAFE SEX SUPPLIES
-        { id: 17, name: 'Lifestyle Normal Condoms', category: 'safe-sex', starting: 700, current: 700, min: 140, unit: 'each', location: 'Locked Cabinet C' },
-        { id: 18, name: 'Lifestyle Large Condoms', category: 'safe-sex', starting: 700, current: 700, min: 140, unit: 'each', location: 'Locked Cabinet C' },
-        { id: 19, name: 'Dental Dam', category: 'safe-sex', starting: 100, current: 100, min: 20, unit: 'each', location: 'Locked Cabinet C' },
-        { id: 20, name: 'Personal Lubricant', category: 'safe-sex', starting: 1008, current: 1008, min: 200, unit: 'packet', location: 'Locked Cabinet C' },
-        
-        // CATEGORY 4: TESTING SUPPLIES
-        { id: 21, name: 'HIV Test Kit', category: 'testing', starting: 100, current: 100, min: 20, unit: 'kit', location: 'Locked Med Cabinet' },
-        
-        // CATEGORY 5: WOUND CARE SUPPLIES
-        { id: 22, name: 'First Aid Sheer Band Aids', category: 'wound-care', starting: 1200, current: 1200, min: 300, unit: 'bandage', location: 'First Aid Station' },
-        { id: 23, name: 'Knuckle Adhesive Bandages', category: 'wound-care', starting: 100, current: 100, min: 25, unit: 'bandage', location: 'First Aid Station' },
-        { id: 24, name: 'Blue Medical Tape Rolls', category: 'wound-care', starting: 30, current: 30, min: 6, unit: 'roll', location: 'First Aid Station' },
-        { id: 25, name: 'Micropore Tape', category: 'wound-care', starting: 100, current: 100, min: 20, unit: 'roll', location: 'First Aid Station' },
-        { id: 26, name: 'Benzalkonium Chloride Towelettes', category: 'wound-care', starting: 1000, current: 1000, min: 200, unit: 'towelette', location: 'First Aid Station' },
-        { id: 27, name: 'Manicure Sticks', category: 'wound-care', starting: 288, current: 288, min: 60, unit: 'each', location: 'First Aid Station' },
-        { id: 28, name: 'Finger Cots', category: 'wound-care', starting: 144, current: 144, min: 30, unit: 'each', location: 'First Aid Station' },
-        
-        // CATEGORY 6: HYGIENE & PERSONAL CARE
-        { id: 29, name: 'Hand Sanitizing Purell Wipes', category: 'hygiene', starting: 100, current: 100, min: 20, unit: 'wipe', location: 'Multiple Locations' },
-        { id: 30, name: 'Purell Hand Sanitizing Bottles', category: 'hygiene', starting: 48, current: 48, min: 10, unit: 'bottle', location: 'Multiple Locations' },
-        { id: 31, name: 'Lip Ointments', category: 'hygiene', starting: 1728, current: 1728, min: 350, unit: 'each', location: 'Supply Closet' },
-        { id: 32, name: 'Lip Balm', category: 'hygiene', starting: 288, current: 288, min: 60, unit: 'each', location: 'Supply Closet' },
-        { id: 33, name: 'Dawnmist Shampoo and Conditioner Packets', category: 'hygiene', starting: 100, current: 100, min: 20, unit: 'packet', location: 'Supply Closet' },
-        { id: 34, name: 'Washcloths', category: 'hygiene', starting: 1152, current: 1152, min: 230, unit: 'each', location: 'Supply Closet' },
-        { id: 35, name: 'Fingernail Clippers', category: 'hygiene', starting: 18, current: 18, min: 4, unit: 'each', location: 'Supply Closet' },
-        { id: 36, name: 'Deodorant', category: 'hygiene', starting: 96, current: 96, min: 20, unit: 'each', location: 'Supply Closet' },
-        { id: 37, name: 'Toothbrush', category: 'hygiene', starting: 144, current: 144, min: 30, unit: 'each', location: 'Supply Closet' },
-        { id: 38, name: 'Gel Fluoride Toothpaste', category: 'hygiene', starting: 144, current: 144, min: 30, unit: 'tube', location: 'Supply Closet' },
-        { id: 39, name: 'Shampoo and Hand Wash Packets', category: 'hygiene', starting: 300, current: 300, min: 60, unit: 'packet', location: 'Supply Closet' },
-        
-        // CATEGORY 7: FEMININE HYGIENE
-        { id: 40, name: 'Tampax Regular', category: 'feminine', starting: 80, current: 80, min: 16, unit: 'each', location: 'Supply Closet' },
-        { id: 41, name: 'Tampons', category: 'feminine', starting: 80, current: 80, min: 16, unit: 'each', location: 'Supply Closet' },
-        { id: 42, name: 'Kotex Regular Maxi Pads', category: 'feminine', starting: 120, current: 120, min: 25, unit: 'each', location: 'Supply Closet' },
-        
-        // CATEGORY 8: DISPOSAL & SAFETY
-        { id: 43, name: 'Needle Disposal Box', category: 'disposal', starting: 200, current: 200, min: 40, unit: 'each', location: 'Multiple Locations' },
-        { id: 44, name: 'Drawstring Backpack', category: 'disposal', starting: 50, current: 50, min: 10, unit: 'each', location: 'Storage Area' }
-    ],
-    kits: JSON.parse(JSON.stringify(KITS)) // Deep copy of kit definitions
+    inventory: DEFAULT_INVENTORY.map(i => ({ ...i, current: i.starting, min: Math.ceil(i.starting * 0.2), photo: null, custom: false })),
+    kits: JSON.parse(JSON.stringify(KITS))
 };
 
-// ============================================
-// INITIALIZATION
-// ============================================
-
-document.addEventListener('DOMContentLoaded', function() {
+// ── Init ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
     loadData();
     setupEventListeners();
     updateDashboard();
     displayCurrentDate();
-    
-    // Show login screen on load
-    if (isLocked) {
-        document.getElementById('loginScreen').classList.remove('hidden');
-    }
-    
-    // Set current datetime for encounter form
     const now = new Date();
-    const datetime = now.toISOString().slice(0, 16);
-    if (document.getElementById('encounterDateTime')) {
-        document.getElementById('encounterDateTime').value = datetime;
-    }
-    
-    // Load thresholds into settings
+    const dt = now.toISOString().slice(0,16);
+    const enc = document.getElementById('encounterDateTime');
+    if (enc) enc.value = dt;
     document.getElementById('criticalThreshold').value = THRESHOLDS.critical;
     document.getElementById('lowThreshold').value = THRESHOLDS.low;
     document.getElementById('reorderThreshold').value = THRESHOLDS.reorder;
 });
 
 function displayCurrentDate() {
-    const dateEl = document.getElementById('currentDate');
-    if (dateEl) {
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        dateEl.textContent = new Date().toLocaleDateString('en-US', options);
-    }
+    const el = document.getElementById('currentDate');
+    if (el) el.textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 }
 
-// ============================================
-// SECURITY & AUTHENTICATION
-// ============================================
-
-document.getElementById('loginForm').addEventListener('submit', function(e) {
+// ── Security ──────────────────────────────────────────────────
+document.getElementById('loginForm').addEventListener('submit', e => {
     e.preventDefault();
     const pin = document.getElementById('pinInput').value;
-    
     if (pin === APP_PIN) {
         isLocked = false;
         document.getElementById('loginScreen').classList.add('hidden');
@@ -225,308 +116,208 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
         document.getElementById('pinInput').value = '';
     }
 });
-
 document.getElementById('lockBtn').addEventListener('click', lockApp);
-
-function lockApp() {
-    isLocked = true;
-    document.getElementById('loginScreen').classList.remove('hidden');
-    clearTimeout(autoLockTimeout);
-}
-
-function resetAutoLock() {
-    clearTimeout(autoLockTimeout);
-    // Auto-lock after 5 minutes of inactivity
-    autoLockTimeout = setTimeout(lockApp, 5 * 60 * 1000);
-}
-
-// Reset auto-lock on any user activity
+function lockApp() { isLocked = true; document.getElementById('loginScreen').classList.remove('hidden'); clearTimeout(autoLockTimeout); }
+function resetAutoLock() { clearTimeout(autoLockTimeout); autoLockTimeout = setTimeout(lockApp, 5*60*1000); }
 document.addEventListener('click', resetAutoLock);
-document.addEventListener('keypress', resetAutoLock);
 document.addEventListener('touchstart', resetAutoLock);
 
-// ============================================
-// DATA MANAGEMENT
-// ============================================
-
+// ── Data ──────────────────────────────────────────────────────
 function saveData() {
     localStorage.setItem('chrData', JSON.stringify(DB));
     localStorage.setItem('lastSync', new Date().toISOString());
 }
-
 function loadData() {
     const saved = localStorage.getItem('chrData');
     if (saved) {
-        const loadedData = JSON.parse(saved);
-        DB.participants = loadedData.participants || [];
-        DB.encounters = loadedData.encounters || [];
-        DB.testing = loadedData.testing || [];
-        DB.referrals = loadedData.referrals || [];
-        DB.kitDistributions = loadedData.kitDistributions || [];
-        DB.inventory = loadedData.inventory || DB.inventory;
-        DB.kits = loadedData.kits || DB.kits;
+        const d = JSON.parse(saved);
+        DB.participants     = d.participants     || [];
+        DB.encounters       = d.encounters       || [];
+        DB.testing          = d.testing          || [];
+        DB.referrals        = d.referrals        || [];
+        DB.kitDistributions = d.kitDistributions || [];
+        DB.inventory        = d.inventory        || DB.inventory;
+        DB.kits             = d.kits             || DB.kits;
     }
-    const lastSync = localStorage.getItem('lastSync');
-    if (lastSync && document.getElementById('lastSync')) {
-        document.getElementById('lastSync').textContent = new Date(lastSync).toLocaleString();
-    }
+    const ls = localStorage.getItem('lastSync');
+    const lsEl = document.getElementById('lastSync');
+    if (ls && lsEl) lsEl.textContent = new Date(ls).toLocaleString();
 }
 
-// ============================================
-// NAVIGATION
-// ============================================
-
+// ── Navigation ────────────────────────────────────────────────
 function showView(viewId) {
-    // Hide all views
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    
-    // Show selected view
     document.getElementById(viewId).classList.add('active');
-    
-    // Update specific views when shown
-    if (viewId === 'dashboard') {
-        updateDashboard();
-    } else if (viewId === 'inventory') {
-        displayInventory();
-    } else if (viewId === 'kits') {
-        updateKitStatusDisplay();
-        populateParticipantDropdown('kitParticipant');
-    } else if (viewId === 'encounter') {
-        populateParticipantDropdown('encounterParticipant');
-    } else if (viewId === 'testing') {
-        populateParticipantDropdown('testParticipant');
-        displayTestingSummary();
-    } else if (viewId === 'referrals') {
-        populateParticipantDropdown('referralParticipant');
-        displayReferralSummary();
-    } else if (viewId === 'rfidManage') {
-        populateParticipantDropdown('rfidParticipantSelect');
-        displayRFIDStats();
-        setupRFIDEventListeners();
-    } else if (viewId === 'settings') {
-        updateSettingsDisplay();
-    }
+    if (viewId === 'dashboard')         { updateDashboard(); }
+    if (viewId === 'inventory')         { displayInventory(); }
+    if (viewId === 'kits')              { updateKitStatusDisplay(); populateDD('kitParticipant'); }
+    if (viewId === 'encounter')         { populateDD('encounterParticipant'); buildInventoryPicker('encounterInventoryList', 'enc'); }
+    if (viewId === 'testing')           { populateDD('testParticipant'); displayTestingSummary(); }
+    if (viewId === 'referrals')         { populateDD('referralParticipant'); displayReferralSummary(); }
+    if (viewId === 'rfidManage')        { populateDD('rfidParticipantSelect'); displayRFIDStats(); setupRFIDForm(); }
+    if (viewId === 'settings')          { updateSettingsDisplay(); }
+    if (viewId === 'enrollment')        { buildInventoryPicker('enrollmentInventoryList', 'enr'); }
+    if (viewId === 'addInventoryItem')  { showRecentCustomItems(); }
+    if (viewId === 'participantHub')    { initParticipantHub(); }
 }
 
-// ============================================
-// RFID STATISTICS DISPLAY
-// ============================================
-
-function displayRFIDStats() {
-    const statsEl = document.getElementById('rfidStatsDisplay');
-    
-    const totalParticipants = DB.participants.length;
-    const assignedKeychains = DB.participants.filter(p => p.rfidAssigned).length;
-    const unassignedParticipants = totalParticipants - assignedKeychains;
-    const assignmentRate = totalParticipants > 0 ? Math.round((assignedKeychains / totalParticipants) * 100) : 0;
-    
-    let html = `
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total Participants</h3>
-                <p class="stat-number">${totalParticipants}</p>
-            </div>
-            <div class="stat-card">
-                <h3>RFID Keychains Assigned</h3>
-                <p class="stat-number">${assignedKeychains}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Unassigned</h3>
-                <p class="stat-number">${unassignedParticipants}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Assignment Rate</h3>
-                <p class="stat-number">${assignmentRate}%</p>
-            </div>
-        </div>
-    `;
-    
-    if (unassignedParticipants > 0) {
-        html += `
-            <div class="alert alert-warning" style="margin-top: 20px;">
-                <strong>⚠️ ${unassignedParticipants} Participant${unassignedParticipants > 1 ? 's' : ''} Need${unassignedParticipants === 1 ? 's' : ''} RFID Keychains</strong>
-                <p>Use the form above to program keychains for existing participants.</p>
-            </div>
-        `;
-    }
-    
-    statsEl.innerHTML = html;
-}
-
-// ============================================
-// DASHBOARD FUNCTIONS
-// ============================================
-
+// ── Dashboard ─────────────────────────────────────────────────
 function updateDashboard() {
-    // Update stats
     document.getElementById('totalParticipants').textContent = DB.participants.length;
-    
-    // Today's encounters
     const today = new Date().toDateString();
-    const todayEncounters = DB.encounters.filter(e => 
-        new Date(e.dateTime).toDateString() === today
-    ).length;
-    document.getElementById('todayEncounters').textContent = todayEncounters;
-    
-    // Total needles
-    const totalNeedlesOut = DB.encounters.reduce((sum, e) => sum + (e.needlesOut || 0), 0);
-    const totalNeedlesIn = DB.encounters.reduce((sum, e) => sum + (e.needlesIn || 0), 0);
-    document.getElementById('needlesOut').textContent = totalNeedlesOut.toLocaleString();
-    document.getElementById('needlesIn').textContent = totalNeedlesIn.toLocaleString();
-    
-    // Display alerts
+    document.getElementById('todayEncounters').textContent = DB.encounters.filter(e => new Date(e.dateTime).toDateString() === today).length;
+    document.getElementById('needlesOut').textContent = DB.encounters.reduce((s,e) => s+(e.needlesOut||0),0).toLocaleString();
+    document.getElementById('needlesIn').textContent  = DB.encounters.reduce((s,e) => s+(e.needlesIn||0),0).toLocaleString();
     displayAlerts();
 }
-
 function displayAlerts() {
-    const alertsSection = document.getElementById('alertsSection');
     const alerts = generateAlerts();
-    
-    if (alerts.length === 0) {
-        alertsSection.innerHTML = `
-            <div class="alert alert-success">
-                <strong>✅ All Inventory OK</strong> - No items need immediate attention
-            </div>
-        `;
-    } else {
-        let html = `<div class="alert alert-warning">
-            <strong>⚠️ INVENTORY ALERTS (${alerts.length})</strong>
-        </div>`;
-        
-        // Show first 3 critical/low alerts
-        alerts.slice(0, 3).forEach(alert => {
-            const icon = alert.level === 'critical' ? '🔴' : alert.level === 'low' ? '🟡' : '🟠';
-            html += `
-                <div class="alert alert-${alert.level}">
-                    ${icon} <strong>${alert.item}</strong>: ${alert.current}/${alert.starting} (${alert.percent}%) - ${alert.message}
-                </div>
-            `;
-        });
-        
-        if (alerts.length > 3) {
-            html += `<div class="alert alert-info">...and ${alerts.length - 3} more. <a href="#" onclick="showView('inventory'); return false;">View All</a></div>`;
-        }
-        
-        alertsSection.innerHTML = html;
-    }
+    const sec = document.getElementById('alertsSection');
+    if (!alerts.length) { sec.innerHTML = '<div class="alert alert-success"><strong>✅ All Inventory OK</strong></div>'; return; }
+    let html = `<div class="alert alert-warning"><strong>⚠️ INVENTORY ALERTS (${alerts.length})</strong></div>`;
+    alerts.slice(0,3).forEach(a => {
+        const icon = a.level==='critical'?'🔴':a.level==='low'?'🟡':'🟠';
+        html += `<div class="alert alert-${a.level}">${icon} <strong>${a.item}</strong>: ${a.current}/${a.starting} (${a.percent}%) — ${a.message}</div>`;
+    });
+    if (alerts.length>3) html += `<div class="alert alert-info">…and ${alerts.length-3} more. <a href="#" onclick="showView('inventory');return false;">View All</a></div>`;
+    sec.innerHTML = html;
 }
-
 function generateAlerts() {
     const alerts = [];
-    
-    // Check inventory items
     DB.inventory.forEach(item => {
-        const percent = Math.round((item.current / item.starting) * 100);
-        
-        if (percent < THRESHOLDS.critical) {
-            alerts.push({
-                level: 'critical',
-                item: item.name,
-                current: item.current,
-                starting: item.starting,
-                percent: percent,
-                message: 'ORDER NOW - CRITICAL'
-            });
-        } else if (percent < THRESHOLDS.low) {
-            alerts.push({
-                level: 'low',
-                item: item.name,
-                current: item.current,
-                starting: item.starting,
-                percent: percent,
-                message: 'LOW STOCK'
-            });
-        } else if (percent < THRESHOLDS.reorder) {
-            alerts.push({
-                level: 'reorder',
-                item: item.name,
-                current: item.current,
-                starting: item.starting,
-                percent: percent,
-                message: 'REORDER SOON'
-            });
-        }
+        const pct = Math.round((item.current/item.starting)*100);
+        if (pct < THRESHOLDS.critical) alerts.push({level:'critical',item:item.name,current:item.current,starting:item.starting,percent:pct,message:'ORDER NOW'});
+        else if (pct < THRESHOLDS.low) alerts.push({level:'low',item:item.name,current:item.current,starting:item.starting,percent:pct,message:'LOW STOCK'});
+        else if (pct < THRESHOLDS.reorder) alerts.push({level:'reorder',item:item.name,current:item.current,starting:item.starting,percent:pct,message:'REORDER SOON'});
     });
-    
-    // Check kits
-    Object.keys(DB.kits).forEach(kitKey => {
-        const kit = DB.kits[kitKey];
-        const percent = Math.round((kit.current / kit.starting) * 100);
-        
-        if (percent < THRESHOLDS.low) {
-            alerts.push({
-                level: 'low',
-                item: `${kitKey} (${kit.name})`,
-                current: kit.current,
-                starting: kit.starting,
-                percent: percent,
-                message: 'ASSEMBLE MORE KITS'
-            });
-        }
+    Object.keys(DB.kits).forEach(k => {
+        const kit = DB.kits[k];
+        const pct = Math.round((kit.current/kit.starting)*100);
+        if (pct < THRESHOLDS.low) alerts.push({level:'low',item:`${k} (${kit.name})`,current:kit.current,starting:kit.starting,percent:pct,message:'ASSEMBLE MORE KITS'});
     });
-    
-    // Sort by severity
-    alerts.sort((a, b) => {
-        const order = { critical: 0, low: 1, reorder: 2 };
-        return order[a.level] - order[b.level];
-    });
-    
-    return alerts;
+    return alerts.sort((a,b) => ({critical:0,low:1,reorder:2}[a.level]-{critical:0,low:1,reorder:2}[b.level]));
 }
 
-// ============================================
-// PARTICIPANT ENROLLMENT
-// ============================================
+// ── Helpers ───────────────────────────────────────────────────
+function populateDD(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select Participant...</option>';
+    DB.participants.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = `${p.firstName} ${p.lastName} (${p.id})`;
+        sel.appendChild(o);
+    });
+}
+function generateRandomParticipantID() {
+    let id, unique = false;
+    while (!unique) {
+        id = 'CHR-' + (Math.floor(Math.random()*90000000)+10000000);
+        unique = !DB.participants.some(p => p.id === id);
+    }
+    return id;
+}
+function updateInventoryItem(name, delta) {
+    const item = DB.inventory.find(i => i.name === name);
+    if (item) item.current = Math.max(0, item.current + delta);
+}
+function categoryLabel(cat) {
+    const map = {'harm-reduction':'Harm Reduction','overdose':'Overdose Prevention','safe-sex':'Safe Sex','testing':'Testing','wound-care':'Wound Care','hygiene':'Hygiene','feminine':'Feminine Hygiene','disposal':'Disposal & Safety','custom':'Custom'};
+    return map[cat] || cat;
+}
 
+// ── Inventory Picker (shared for enrollment + encounter) ──────
+function buildInventoryPicker(containerId, prefix) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    let html = '';
+    DB.inventory.forEach(item => {
+        const pct = Math.round((item.current/item.starting)*100);
+        const statusDot = pct < THRESHOLDS.critical ? '🔴' : pct < THRESHOLDS.low ? '🟡' : pct < THRESHOLDS.reorder ? '🟠' : '🟢';
+        const photoHTML = item.photo
+            ? `<img src="${item.photo}" class="picker-item-photo" alt="${item.name}">`
+            : `<div class="picker-item-emoji">${categoryEmoji(item.category)}</div>`;
+        html += `
+        <div class="picker-item" id="${prefix}-item-${item.id}" data-name="${item.name}" data-category="${item.category}">
+            <div class="picker-item-left">
+                ${photoHTML}
+                <div class="picker-item-info">
+                    <strong>${item.name}</strong>
+                    <small>${categoryLabel(item.category)} · ${item.current} ${item.unit} available ${statusDot}</small>
+                </div>
+            </div>
+            <div class="picker-item-right">
+                <input type="number" class="picker-qty" id="${prefix}-qty-${item.id}"
+                    min="0" max="${item.current}" value="0"
+                    onchange="updatePickerSummary('${prefix}')">
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function filterEnrollmentInventory() {
+    const search = document.getElementById('enrollmentInventorySearch').value.toLowerCase();
+    const cat = document.getElementById('enrollmentInventoryCategory').value;
+    document.querySelectorAll('#enrollmentInventoryList .picker-item').forEach(el => {
+        const name = el.dataset.name.toLowerCase();
+        const c = el.dataset.category;
+        el.style.display = ((!search || name.includes(search)) && (cat === 'all' || c === cat)) ? '' : 'none';
+    });
+}
+function filterEncounterInventory() {
+    const search = document.getElementById('encounterInventorySearch').value.toLowerCase();
+    document.querySelectorAll('#encounterInventoryList .picker-item').forEach(el => {
+        el.style.display = (!search || el.dataset.name.toLowerCase().includes(search)) ? '' : 'none';
+    });
+}
+function updatePickerSummary(prefix) {
+    if (prefix !== 'enr') return;
+    const selected = getPickerSelections(prefix);
+    const summary = document.getElementById('enrollmentInventorySummary');
+    const items = document.getElementById('enrollmentSummaryItems');
+    if (!summary || !items) return;
+    if (!selected.length) { summary.style.display = 'none'; return; }
+    summary.style.display = 'block';
+    items.innerHTML = selected.map(s => `<span class="summary-tag">${s.name} × ${s.qty}</span>`).join('');
+}
+function getPickerSelections(prefix) {
+    const results = [];
+    document.querySelectorAll(`[id^="${prefix}-qty-"]`).forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        if (qty > 0) {
+            const id = input.id.replace(`${prefix}-qty-`, '');
+            const item = DB.inventory.find(i => i.id == id);
+            if (item) results.push({ id: item.id, name: item.name, qty });
+        }
+    });
+    return results;
+}
+function categoryEmoji(cat) {
+    const map = {'harm-reduction':'💉','overdose':'🚨','safe-sex':'❤️','testing':'🧪','wound-care':'🩹','hygiene':'🧴','feminine':'🌸','disposal':'🗑️','custom':'📦'};
+    return map[cat] || '📦';
+}
+
+// ── Enrollment ────────────────────────────────────────────────
 function setupEventListeners() {
     document.getElementById('enrollmentForm').addEventListener('submit', handleEnrollment);
     document.getElementById('encounterForm').addEventListener('submit', handleEncounter);
     document.getElementById('kitDistributionForm').addEventListener('submit', handleKitDistribution);
     document.getElementById('testingForm').addEventListener('submit', handleTesting);
     document.getElementById('referralForm').addEventListener('submit', handleReferral);
-    
-    // Inventory filters
+    document.getElementById('addInventoryForm').addEventListener('submit', handleAddInventoryItem);
     document.getElementById('inventoryCategory').addEventListener('change', displayInventory);
     document.getElementById('inventoryFilter').addEventListener('change', displayInventory);
     document.getElementById('inventorySearch').addEventListener('input', displayInventory);
 }
 
-// ============================================
-// RANDOM PARTICIPANT ID GENERATION
-// ============================================
-
-function generateRandomParticipantID() {
-    // Generate a truly random 8-digit number for anonymity
-    // Format: CHR-XXXXXXXX (e.g., CHR-84739201)
-    // No date patterns, no sequential patterns - completely random
-    
-    let randomID;
-    let isUnique = false;
-    
-    // Keep generating until we get a unique ID
-    while (!isUnique) {
-        // Generate random 8-digit number (10000000 to 99999999)
-        const randomNum = Math.floor(Math.random() * 90000000) + 10000000;
-        randomID = 'CHR-' + randomNum;
-        
-        // Check if this ID already exists
-        isUnique = !DB.participants.some(p => p.id === randomID);
-    }
-    
-    return randomID;
-}
-
 function handleEnrollment(e) {
     e.preventDefault();
-    
     const services = [];
-    document.querySelectorAll('#enrollmentForm .checkbox-group input:checked').forEach(cb => {
-        services.push(cb.value);
-    });
-    
-    // Generate random participant ID for anonymity
+    document.querySelectorAll('#enrollmentForm .checkbox-group input:checked').forEach(cb => services.push(cb.value));
+    const itemsGiven = getPickerSelections('enr');
     const participantID = generateRandomParticipantID();
-    
     const participant = {
         id: participantID,
         firstName: document.getElementById('firstName').value,
@@ -537,275 +328,192 @@ function handleEnrollment(e) {
         agreementSigned: document.getElementById('agreementSigned').checked,
         enrollmentDate: new Date().toISOString(),
         status: 'Active',
-        rfidAssigned: false,  // Track if RFID keychain has been assigned
-        rfidSerialNumber: null  // Store RFID serial number when assigned
+        rfidAssigned: false,
+        rfidSerialNumber: null,
+        enrollmentItems: itemsGiven
     };
-    
     DB.participants.push(participant);
+    // Deduct inventory
+    itemsGiven.forEach(sel => updateInventoryItem(sel.name, -sel.qty));
     saveData();
-    
-    alert(`✅ Participant enrolled successfully!\n\nParticipant ID: ${participant.id}\n\n⚠️ IMPORTANT: Write this ID on the RFID keychain tag before programming it.\n\nThe participant should keep this keychain with them at all times.`);
-    
-    // Show RFID programming option if NFC is available
-    if ('NDEFReader' in window) {
-        const writeRFID = confirm('Would you like to program an RFID keychain now?\n\nMake sure you have a blank NFC tag ready.');
-        if (writeRFID) {
-            writeParticipantIDToNFC(participant.id);
-        }
+    let msg = `✅ Participant enrolled!\n\nID: ${participant.id}`;
+    if (itemsGiven.length) msg += `\n\n📦 ${itemsGiven.length} item type(s) deducted from inventory.`;
+    alert(msg);
+    if ('NDEFReader' in window && confirm('Program an RFID keychain for this participant now?')) {
+        writeParticipantIDToNFC(participantID);
     }
-    
     document.getElementById('enrollmentForm').reset();
+    document.querySelectorAll('#enrollmentInventoryList .picker-qty').forEach(i => i.value = 0);
+    document.getElementById('enrollmentInventorySummary').style.display = 'none';
     showView('dashboard');
 }
 
-function populateParticipantDropdown(selectId) {
-    const select = document.getElementById(selectId);
-    select.innerHTML = '<option value="">Select Participant...</option>';
-    
-    DB.participants.forEach(p => {
-        const option = document.createElement('option');
-        option.value = p.id;
-        option.textContent = `${p.firstName} ${p.lastName} (${p.id})`;
-        select.appendChild(option);
-    });
-}
-
-// ============================================
-// ENCOUNTER LOGGING
-// ============================================
-
+// ── Encounter ─────────────────────────────────────────────────
 function handleEncounter(e) {
     e.preventDefault();
-    
     const services = [];
-    document.querySelectorAll('.service-check:checked').forEach(cb => {
-        services.push(cb.value);
-    });
-    
-    const needlesOut = parseInt(document.getElementById('needlesOut').value) || 0;
-    const needlesIn = parseInt(document.getElementById('needlesIn').value) || 0;
-    const naloxoneGiven = parseInt(document.getElementById('naloxoneGiven').value) || 0;
-    const condomsGiven = parseInt(document.getElementById('condomsGiven').value) || 0;
-    
+    document.querySelectorAll('.service-check:checked').forEach(cb => services.push(cb.value));
+    const needlesOut   = parseInt(document.getElementById('encNeedlesOut').value) || 0;
+    const needlesIn    = parseInt(document.getElementById('encNeedlesIn').value)  || 0;
+    const naloxoneGiven = parseInt(document.getElementById('encNaloxone').value)  || 0;
+    const condomsGiven  = parseInt(document.getElementById('encCondoms').value)   || 0;
+    const additionalItems = getPickerSelections('enc');
     const encounter = {
         id: 'ENC-' + Date.now(),
         participantID: document.getElementById('encounterParticipant').value,
         dateTime: document.getElementById('encounterDateTime').value,
-        services: services,
-        needlesOut: needlesOut,
-        needlesIn: needlesIn,
-        naloxoneGiven: naloxoneGiven,
-        condomsGiven: condomsGiven,
+        services,
+        needlesOut,
+        needlesIn,
+        naloxoneGiven,
+        condomsGiven,
+        additionalItems,
         notes: document.getElementById('encounterNotes').value,
         staffInitials: document.getElementById('staffInitials').value
     };
-    
     DB.encounters.push(encounter);
-    
-    // Update inventory
     updateInventoryItem('Needles/Syringes', -needlesOut);
     updateInventoryItem('4mg Naloxone Nasal Spray', -naloxoneGiven);
     updateInventoryItem('Lifestyle Normal Condoms', -condomsGiven);
-    
+    additionalItems.forEach(sel => updateInventoryItem(sel.name, -sel.qty));
     saveData();
-    
     alert('✅ Encounter logged successfully!');
     document.getElementById('encounterForm').reset();
+    document.querySelectorAll('#encounterInventoryList .picker-qty').forEach(i => i.value = 0);
     showView('dashboard');
 }
 
-// ============================================
-// KIT DISTRIBUTION (NEW)
-// ============================================
-
+// ── Kit Distribution ──────────────────────────────────────────
 function handleKitDistribution(e) {
     e.preventDefault();
-    
     const kitType = document.getElementById('kitType').value;
-    const quantity = parseInt(document.getElementById('kitQuantity').value);
-    
-    // Check if enough kits available
-    if (DB.kits[kitType].current < quantity) {
-        alert(`❌ Not enough ${kitType} kits available!\nCurrent: ${DB.kits[kitType].current}\nRequested: ${quantity}`);
-        return;
-    }
-    
-    const distribution = {
+    const qty = parseInt(document.getElementById('kitQuantity').value);
+    if (DB.kits[kitType].current < qty) { alert(`❌ Not enough ${kitType} kits available!`); return; }
+    const dist = {
         id: 'KIT-' + Date.now(),
         participantID: document.getElementById('kitParticipant').value,
-        kitType: kitType,
-        kitName: DB.kits[kitType].name,
-        quantity: quantity,
+        kitType, kitName: DB.kits[kitType].name, quantity: qty,
         dateTime: new Date().toISOString(),
         notes: document.getElementById('kitNotes').value,
         staffInitials: document.getElementById('kitStaffInitials').value
     };
-    
-    DB.kitDistributions.push(distribution);
-    
-    // Decrease kit count
-    DB.kits[kitType].current -= quantity;
-    
-    // Decrease individual items
-    const kit = KITS[kitType];
-    Object.keys(kit.items).forEach(itemName => {
-        const qtyPerKit = kit.items[itemName];
-        updateInventoryItem(itemName, -(qtyPerKit * quantity));
-    });
-    
+    DB.kitDistributions.push(dist);
+    DB.kits[kitType].current -= qty;
+    Object.keys(KITS[kitType].items).forEach(itemName => updateInventoryItem(itemName, -(KITS[kitType].items[itemName]*qty)));
     saveData();
-    
-    alert(`✅ ${quantity} x ${kitType} (${DB.kits[kitType].name}) distributed successfully!`);
+    alert(`✅ ${qty} × ${kitType} distributed!`);
     document.getElementById('kitDistributionForm').reset();
     updateKitStatusDisplay();
 }
-
 function updateKitStatusDisplay() {
-    const display = document.getElementById('kitStatusDisplay');
+    const el = document.getElementById('kitStatusDisplay');
     let html = '';
-    
-    Object.keys(DB.kits).forEach(kitKey => {
-        const kit = DB.kits[kitKey];
-        const percent = Math.round((kit.current / kit.starting) * 100);
-        const barWidth = Math.min(percent, 100);
-        
-        let statusClass = 'ok';
-        let statusIcon = '🟢';
-        let statusText = '';
-        
-        if (percent < THRESHOLDS.critical) {
-            statusClass = 'critical';
-            statusIcon = '🔴';
-            statusText = `⚠️ Assemble ${kit.starting - kit.current} more kits`;
-        } else if (percent < THRESHOLDS.low) {
-            statusClass = 'low';
-            statusIcon = '🟡';
-            statusText = `⚠️ Assemble ${Math.ceil((kit.starting * 0.5) - kit.current)} more kits`;
-        } else if (percent < THRESHOLDS.reorder) {
-            statusClass = 'reorder';
-            statusIcon = '🟠';
-        }
-        
-        html += `
-            <div class="kit-status-item ${statusClass}">
-                <div class="kit-header">
-                    <strong>${kitKey} - ${kit.name}</strong>
-                    <span>${statusIcon} ${kit.current}/${kit.starting}</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill ${statusClass}" style="width: ${barWidth}%"></div>
-                </div>
-                ${statusText ? `<div class="kit-alert">${statusText}</div>` : ''}
-            </div>
-        `;
+    Object.keys(DB.kits).forEach(k => {
+        const kit = DB.kits[k];
+        const pct = Math.round((kit.current/kit.starting)*100);
+        const cls = pct<THRESHOLDS.critical?'critical':pct<THRESHOLDS.low?'low':pct<THRESHOLDS.reorder?'reorder':'ok';
+        const icon = pct<THRESHOLDS.critical?'🔴':pct<THRESHOLDS.low?'🟡':pct<THRESHOLDS.reorder?'🟠':'🟢';
+        html += `<div class="kit-status-item ${cls}"><div class="kit-header"><strong>${k} — ${kit.name}</strong><span>${icon} ${kit.current}/${kit.starting}</span></div><div class="progress-bar"><div class="progress-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
     });
-    
-    display.innerHTML = html;
+    el.innerHTML = html;
 }
 
-// ============================================
-// INVENTORY MANAGEMENT (ENHANCED)
-// ============================================
-
-function displayInventory() {
-    const category = document.getElementById('inventoryCategory').value;
-    const filter = document.getElementById('inventoryFilter').value;
-    const search = document.getElementById('inventorySearch').value.toLowerCase();
-    
-    let items = DB.inventory;
-    
-    // Filter by category
-    if (category !== 'all') {
-        items = items.filter(item => item.category === category);
-    }
-    
-    // Filter by search
-    if (search) {
-        items = items.filter(item => item.name.toLowerCase().includes(search));
-    }
-    
-    // Filter by alert status
-    if (filter !== 'all') {
-        items = items.filter(item => {
-            const percent = (item.current / item.starting) * 100;
-            if (filter === 'critical') return percent < THRESHOLDS.critical;
-            if (filter === 'low') return percent < THRESHOLDS.low;
-            if (filter === 'alerts') return percent < THRESHOLDS.reorder;
-            return true;
-        });
-    }
-    
-    const listEl = document.getElementById('inventoryList');
-    
-    if (items.length === 0) {
-        listEl.innerHTML = '<p class="no-results">No items found matching your filters.</p>';
+// ── Add Custom Inventory Item ─────────────────────────────────
+function previewItemPhoto(event, source) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        newItemPhotoData = e.target.result;
+        document.getElementById('newItemPhotoImg').src = newItemPhotoData;
+        document.getElementById('newItemPhotoImg').style.display = 'block';
+        document.getElementById('newItemPhotoPlaceholder').style.display = 'none';
+        document.getElementById('clearPhotoBtn').style.display = 'inline-block';
+    };
+    reader.readAsDataURL(file);
+}
+function clearItemPhoto() {
+    newItemPhotoData = null;
+    document.getElementById('newItemPhotoImg').style.display = 'none';
+    document.getElementById('newItemPhotoPlaceholder').style.display = 'block';
+    document.getElementById('clearPhotoBtn').style.display = 'none';
+    document.getElementById('newItemPhotoCapture').value = '';
+    document.getElementById('newItemPhotoLibrary').value = '';
+}
+function handleAddInventoryItem(e) {
+    e.preventDefault();
+    const name     = document.getElementById('newItemName').value.trim();
+    const category = document.getElementById('newItemCategory').value;
+    const starting = parseInt(document.getElementById('newItemStarting').value);
+    const unit     = document.getElementById('newItemUnit').value.trim();
+    const minRaw   = document.getElementById('newItemMin').value;
+    const min      = minRaw ? parseInt(minRaw) : Math.ceil(starting * 0.2);
+    const location = document.getElementById('newItemLocation').value.trim() || 'Storage';
+    // Check for duplicate name
+    if (DB.inventory.find(i => i.name.toLowerCase() === name.toLowerCase())) {
+        alert(`⚠️ An item named "${name}" already exists in inventory. Please use a different name.`);
         return;
     }
-    
-    let html = '';
-    items.forEach(item => {
-        const percent = Math.round((item.current / item.starting) * 100);
-        const barWidth = Math.min(percent, 100);
-        
-        let statusClass = 'ok';
-        let statusText = 'OK';
-        let statusIcon = '🟢';
-        
-        if (percent < THRESHOLDS.critical) {
-            statusClass = 'critical';
-            statusText = 'CRITICAL - ORDER NOW';
-            statusIcon = '🔴';
-        } else if (percent < THRESHOLDS.low) {
-            statusClass = 'low';
-            statusText = 'LOW STOCK';
-            statusIcon = '🟡';
-        } else if (percent < THRESHOLDS.reorder) {
-            statusClass = 'reorder';
-            statusText = 'REORDER SOON';
-            statusIcon = '🟠';
-        }
-        
-        html += `
-            <div class="inventory-item ${statusClass}">
-                <div class="item-header">
-                    <div>
-                        <strong>${item.name}</strong>
-                        <small>${item.location}</small>
-                    </div>
-                    <div class="item-status">
-                        ${statusIcon} ${item.current} / ${item.starting} ${item.unit}
-                        <br><small>${percent}% remaining</small>
-                    </div>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill ${statusClass}" style="width: ${barWidth}%"></div>
-                </div>
-                <div class="item-footer">
-                    <span class="status-badge ${statusClass}">${statusText}</span>
-                    <span class="min-threshold">Min: ${item.min} ${item.unit}</span>
-                </div>
-            </div>
-        `;
+    const newId = Math.max(...DB.inventory.map(i => i.id), 100) + 1;
+    const newItem = { id: newId, name, category, starting, current: starting, min, unit, location, photo: newItemPhotoData, custom: true };
+    DB.inventory.push(newItem);
+    saveData();
+    alert(`✅ "${name}" added to inventory!\n\nStarting quantity: ${starting} ${unit}\nCategory: ${categoryLabel(category)}`);
+    document.getElementById('addInventoryForm').reset();
+    clearItemPhoto();
+    showRecentCustomItems();
+}
+function showRecentCustomItems() {
+    const el = document.getElementById('recentCustomItems');
+    const customs = DB.inventory.filter(i => i.custom).slice(-5).reverse();
+    if (!customs.length) { el.innerHTML = '<p style="color:#7f8c8d; padding:10px;">No custom items added yet.</p>'; return; }
+    el.innerHTML = customs.map(item => {
+        const photoHTML = item.photo
+            ? `<img src="${item.photo}" class="custom-item-thumb" alt="${item.name}">`
+            : `<div class="custom-item-emoji">${categoryEmoji(item.category)}</div>`;
+        return `<div class="custom-item-row">${photoHTML}<div class="custom-item-info"><strong>${item.name}</strong><small>${categoryLabel(item.category)} · ${item.current}/${item.starting} ${item.unit}</small></div></div>`;
+    }).join('');
+}
+
+// ── Inventory Display ─────────────────────────────────────────
+function displayInventory() {
+    const cat    = document.getElementById('inventoryCategory').value;
+    const filter = document.getElementById('inventoryFilter').value;
+    const search = document.getElementById('inventorySearch').value.toLowerCase();
+    let items = DB.inventory;
+    if (cat !== 'all')    items = items.filter(i => i.category === cat);
+    if (search)           items = items.filter(i => i.name.toLowerCase().includes(search));
+    if (filter !== 'all') items = items.filter(i => {
+        const pct = (i.current/i.starting)*100;
+        if (filter==='critical') return pct < THRESHOLDS.critical;
+        if (filter==='low')      return pct < THRESHOLDS.low;
+        if (filter==='alerts')   return pct < THRESHOLDS.reorder;
+        return true;
     });
-    
-    listEl.innerHTML = html;
+    const el = document.getElementById('inventoryList');
+    if (!items.length) { el.innerHTML = '<p class="no-results">No items found.</p>'; return; }
+    el.innerHTML = items.map(item => {
+        const pct = Math.round((item.current/item.starting)*100);
+        const cls = pct<THRESHOLDS.critical?'critical':pct<THRESHOLDS.low?'low':pct<THRESHOLDS.reorder?'reorder':'ok';
+        const statusText = pct<THRESHOLDS.critical?'CRITICAL — ORDER NOW':pct<THRESHOLDS.low?'LOW STOCK':pct<THRESHOLDS.reorder?'REORDER SOON':'OK';
+        const photoHTML = item.photo
+            ? `<img src="${item.photo}" class="inv-item-photo" alt="${item.name}">`
+            : `<div class="inv-item-emoji">${categoryEmoji(item.category)}</div>`;
+        return `<div class="inventory-item ${cls}">
+            <div class="item-header">
+                <div class="item-header-left">${photoHTML}<div><strong>${item.name}</strong><small>${item.location}${item.custom?' · Custom item':''}</small></div></div>
+                <div class="item-status">${item.current} / ${item.starting} ${item.unit}<br><small>${pct}% remaining</small></div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
+            <div class="item-footer"><span class="status-badge ${cls}">${statusText}</span><span class="min-threshold">Min: ${item.min} ${item.unit}</span></div>
+        </div>`;
+    }).join('');
 }
 
-function updateInventoryItem(itemName, changeAmount) {
-    const item = DB.inventory.find(i => i.name === itemName);
-    if (item) {
-        item.current = Math.max(0, item.current + changeAmount);
-    }
-}
-
-// ============================================
-// TESTING & TREATMENT
-// ============================================
-
+// ── Testing ───────────────────────────────────────────────────
 function handleTesting(e) {
     e.preventDefault();
-    
-    const testRecord = {
+    const rec = {
         id: 'TEST-' + Date.now(),
         participantID: document.getElementById('testParticipant').value,
         testType: document.getElementById('testType').value,
@@ -814,61 +522,36 @@ function handleTesting(e) {
         treatmentStarted: document.getElementById('treatmentStarted').value,
         notes: document.getElementById('testNotes').value
     };
-    
-    DB.testing.push(testRecord);
-    
-    // Update inventory - decrease test kit
-    const testType = testRecord.testType;
-    if (testType === 'HIV') {
-        updateInventoryItem('HIV Test Kit', -1);
-    }
-    
+    DB.testing.push(rec);
+    if (rec.testType === 'HIV') updateInventoryItem('HIV Test Kit', -1);
     saveData();
-    
-    alert('✅ Test record saved successfully!');
+    alert('✅ Test record saved!');
     document.getElementById('testingForm').reset();
     displayTestingSummary();
 }
-
 function displayTestingSummary() {
-    const summaryEl = document.getElementById('testingSummary');
-    
-    const testCounts = {};
-    DB.testing.forEach(test => {
-        if (!testCounts[test.testType]) {
-            testCounts[test.testType] = { total: 0, positive: 0, negative: 0, pending: 0 };
-        }
-        testCounts[test.testType].total++;
-        if (test.result === 'Positive') testCounts[test.testType].positive++;
-        if (test.result === 'Negative') testCounts[test.testType].negative++;
-        if (test.result === 'Pending') testCounts[test.testType].pending++;
+    const el = document.getElementById('testingSummary');
+    const counts = {};
+    DB.testing.forEach(t => {
+        if (!counts[t.testType]) counts[t.testType] = {total:0,positive:0,negative:0,pending:0};
+        counts[t.testType].total++;
+        if (t.result==='Positive')  counts[t.testType].positive++;
+        if (t.result==='Negative')  counts[t.testType].negative++;
+        if (t.result==='Pending')   counts[t.testType].pending++;
     });
-    
-    let html = '<table class="summary-table"><tr><th>Test Type</th><th>Total</th><th>Positive</th><th>Negative</th><th>Pending</th></tr>';
-    
-    Object.keys(testCounts).forEach(type => {
-        const counts = testCounts[type];
-        html += `<tr>
-            <td><strong>${type}</strong></td>
-            <td>${counts.total}</td>
-            <td>${counts.positive}</td>
-            <td>${counts.negative}</td>
-            <td>${counts.pending}</td>
-        </tr>`;
+    if (!Object.keys(counts).length) { el.innerHTML = '<p style="color:#7f8c8d;padding:10px;">No tests recorded yet.</p>'; return; }
+    let html = '<table class="summary-table"><tr><th>Test</th><th>Total</th><th>Positive</th><th>Negative</th><th>Pending</th></tr>';
+    Object.keys(counts).forEach(type => {
+        const c = counts[type];
+        html += `<tr><td><strong>${type}</strong></td><td>${c.total}</td><td>${c.positive}</td><td>${c.negative}</td><td>${c.pending}</td></tr>`;
     });
-    
-    html += '</table>';
-    summaryEl.innerHTML = html;
+    el.innerHTML = html + '</table>';
 }
 
-// ============================================
-// REFERRAL MANAGEMENT
-// ============================================
-
+// ── Referrals ─────────────────────────────────────────────────
 function handleReferral(e) {
     e.preventDefault();
-    
-    const referral = {
+    const ref = {
         id: 'REF-' + Date.now(),
         participantID: document.getElementById('referralParticipant').value,
         referralTo: document.getElementById('referralTo').value,
@@ -877,629 +560,453 @@ function handleReferral(e) {
         linkedSuccessfully: document.getElementById('linkedSuccessfully').value,
         notes: document.getElementById('referralNotes').value
     };
-    
-    DB.referrals.push(referral);
+    DB.referrals.push(ref);
     saveData();
-    
-    alert('✅ Referral saved successfully!');
+    alert('✅ Referral saved!');
     document.getElementById('referralForm').reset();
     displayReferralSummary();
 }
-
 function displayReferralSummary() {
-    const summaryEl = document.getElementById('referralSummary');
-    
-    const totalRefs = DB.referrals.length;
-    const linkedRefs = DB.referrals.filter(r => r.linkedSuccessfully === 'Yes').length;
-    const linkageRate = totalRefs > 0 ? Math.round((linkedRefs / totalRefs) * 100) : 0;
-    
-    let html = `
-        <div class="summary-card">
-            <h4>Overall Linkage Rate</h4>
-            <p class="stat-large">${linkageRate}%</p>
-            <small>${linkedRefs} of ${totalRefs} successfully linked</small>
-        </div>
-        <table class="summary-table">
-            <tr><th>Organization</th><th>Total Referrals</th><th>Successfully Linked</th><th>Linkage Rate</th></tr>
-    `;
-    
-    const orgs = ['Brightview', 'Horizon Behavioral Health', 'Savidia', 'Other'];
-    orgs.forEach(org => {
+    const el = document.getElementById('referralSummary');
+    const total = DB.referrals.length;
+    const linked = DB.referrals.filter(r => r.linkedSuccessfully === 'Yes').length;
+    const rate = total ? Math.round((linked/total)*100) : 0;
+    let html = `<div class="summary-card"><h4>Overall Linkage Rate</h4><p class="stat-large">${rate}%</p><small>${linked} of ${total} linked</small></div>`;
+    html += '<table class="summary-table"><tr><th>Organization</th><th>Total</th><th>Linked</th><th>Rate</th></tr>';
+    ['Brightview','Horizon Behavioral Health','Savidia','Other'].forEach(org => {
         const orgRefs = DB.referrals.filter(r => r.referralTo === org);
-        const orgLinked = orgRefs.filter(r => r.linkedSuccessfully === 'Yes').length;
-        const orgRate = orgRefs.length > 0 ? Math.round((orgLinked / orgRefs.length) * 100) : 0;
-        
-        if (orgRefs.length > 0) {
-            html += `<tr>
-                <td><strong>${org}</strong></td>
-                <td>${orgRefs.length}</td>
-                <td>${orgLinked}</td>
-                <td>${orgRate}%</td>
-            </tr>`;
-        }
+        if (!orgRefs.length) return;
+        const orgLinked = orgRefs.filter(r => r.linkedSuccessfully==='Yes').length;
+        html += `<tr><td><strong>${org}</strong></td><td>${orgRefs.length}</td><td>${orgLinked}</td><td>${orgRefs.length?Math.round((orgLinked/orgRefs.length)*100):0}%</td></tr>`;
     });
-    
-    html += '</table>';
-    summaryEl.innerHTML = html;
+    el.innerHTML = html + '</table>';
 }
 
-// ============================================
-// REPORTING (ENHANCED WITH PDF EXPORT)
-// ============================================
+// ══════════════════════════════════════════════════════════════
+// PARTICIPANT HUB
+// ══════════════════════════════════════════════════════════════
 
-function generateReport(reportType) {
-    const output = document.getElementById('reportOutput');
-    const content = generateReportContent(reportType);
-    output.innerHTML = content;
+function initParticipantHub() {
+    document.getElementById('participantProfile').style.display = 'none';
+    document.getElementById('hubSearchResults').innerHTML = '';
+    document.getElementById('hubSearch').value = '';
+    // Show all participants as cards initially
+    renderParticipantCards(DB.participants);
 }
 
-function generateReportContent(reportType) {
-    let html = `
-        <div class="report-header">
-            <h2>CHR Program Report</h2>
-            <p>Generated: ${new Date().toLocaleString()}</p>
-            <p>Report Period: July 1, 2025 - June 30, 2026</p>
+function searchParticipantsHub() {
+    const q = document.getElementById('hubSearch').value.toLowerCase().trim();
+    if (!q) { renderParticipantCards(DB.participants); return; }
+    const filtered = DB.participants.filter(p =>
+        p.firstName.toLowerCase().includes(q) ||
+        p.lastName.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q)
+    );
+    renderParticipantCards(filtered);
+}
+
+function renderParticipantCards(participants) {
+    const el = document.getElementById('hubSearchResults');
+    if (!participants.length) {
+        el.innerHTML = '<p class="no-results">No participants found.</p>';
+        return;
+    }
+    el.innerHTML = participants.map(p => {
+        const encounterCount = DB.encounters.filter(e => e.participantID === p.id).length;
+        const lastEnc = DB.encounters.filter(e => e.participantID === p.id).sort((a,b) => new Date(b.dateTime)-new Date(a.dateTime))[0];
+        const lastVisit = lastEnc ? new Date(lastEnc.dateTime).toLocaleDateString() : 'No visits yet';
+        const rfidBadge = p.rfidAssigned ? '<span class="rfid-badge-small">🔑 RFID</span>' : '';
+        return `<div class="participant-card" onclick="openParticipantProfile('${p.id}')">
+            <div class="participant-card-avatar">👤</div>
+            <div class="participant-card-info">
+                <strong>${p.firstName} ${p.lastName}</strong>
+                <small>${p.id} ${rfidBadge}</small>
+                <small>Last visit: ${lastVisit} · ${encounterCount} encounter${encounterCount!==1?'s':''}</small>
+            </div>
+            <div class="participant-card-arrow">›</div>
+        </div>`;
+    }).join('');
+}
+
+function openParticipantProfile(participantId) {
+    const p = DB.participants.find(pt => pt.id === participantId);
+    if (!p) return;
+    document.getElementById('hubSearchResults').style.display = 'none';
+    document.getElementById('hubSearch').parentElement.style.display = 'none';
+    document.getElementById('hubScanBanner').style.display = 'none';
+
+    document.getElementById('profileName').textContent = `${p.firstName} ${p.lastName}`;
+    document.getElementById('profileID').textContent = p.id;
+    document.getElementById('profileRFID').textContent = p.rfidAssigned ? '🔑 RFID Keychain Assigned' : '⚠️ No RFID Keychain';
+    document.getElementById('profileRFID').className = p.rfidAssigned ? 'rfid-badge assigned' : 'rfid-badge unassigned';
+
+    // Quick stats
+    const encounters = DB.encounters.filter(e => e.participantID === p.id);
+    const tests = DB.testing.filter(t => t.participantID === p.id);
+    const refs = DB.referrals.filter(r => r.participantID === p.id);
+    const kits = DB.kitDistributions.filter(k => k.participantID === p.id);
+    const totalNeedles = encounters.reduce((s,e) => s+(e.needlesOut||0), 0) + (p.enrollmentItems||[]).reduce((s,i) => i.name==='Needles/Syringes'?s+i.qty:s, 0);
+    document.getElementById('profileQuickStats').innerHTML = `
+        <div class="quick-stat"><span class="qs-num">${encounters.length}</span><span class="qs-label">Encounters</span></div>
+        <div class="quick-stat"><span class="qs-num">${tests.length}</span><span class="qs-label">Tests</span></div>
+        <div class="quick-stat"><span class="qs-num">${refs.length}</span><span class="qs-label">Referrals</span></div>
+        <div class="quick-stat"><span class="qs-num">${kits.length}</span><span class="qs-label">Kits</span></div>
+        <div class="quick-stat"><span class="qs-num">${totalNeedles.toLocaleString()}</span><span class="qs-label">Needles Given</span></div>
+    `;
+
+    // Timeline tab
+    buildTimeline(p);
+    // Enrollment tab
+    buildEnrollmentDetail(p);
+    // Inventory tab
+    buildInventoryHistory(p);
+
+    document.getElementById('participantProfile').style.display = 'block';
+    // Reset to timeline tab
+    switchTab('timeline');
+    document.getElementById('participantProfile').scrollIntoView({behavior:'smooth'});
+}
+
+function closeProfile() {
+    document.getElementById('participantProfile').style.display = 'none';
+    document.getElementById('hubSearchResults').style.display = 'block';
+    document.getElementById('hubSearch').parentElement.style.display = 'block';
+    document.getElementById('hubScanBanner').style.display = 'block';
+    renderParticipantCards(DB.participants);
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+    document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.add('active');
+}
+
+function buildTimeline(p) {
+    const events = [];
+
+    // Enrollment event
+    events.push({
+        type: 'enrollment',
+        icon: '🌟',
+        color: '#667eea',
+        title: 'Enrolled in Program',
+        date: new Date(p.enrollmentDate),
+        detail: `Services of interest: ${(p.servicesInterested||[]).join(', ') || 'None selected'}${(p.enrollmentItems||[]).length ? `<br>Items received: ${p.enrollmentItems.map(i=>`${i.name} ×${i.qty}`).join(', ')}` : ''}`
+    });
+
+    // Encounters
+    DB.encounters.filter(e => e.participantID === p.id).forEach(e => {
+        const items = [
+            e.needlesOut ? `Needles ×${e.needlesOut}` : null,
+            e.naloxoneGiven ? `Naloxone ×${e.naloxoneGiven}` : null,
+            e.condomsGiven ? `Condoms ×${e.condomsGiven}` : null,
+            ...(e.additionalItems||[]).map(ai => `${ai.name} ×${ai.qty}`)
+        ].filter(Boolean);
+        events.push({
+            type: 'encounter',
+            icon: '📋',
+            color: '#27ae60',
+            title: 'Encounter',
+            date: new Date(e.dateTime),
+            detail: `Services: ${(e.services||[]).join(', ')||'None'}${items.length?`<br>Items: ${items.join(', ')}`:''}<br>Needles returned: ${e.needlesIn||0}${e.notes?`<br>Notes: ${e.notes}`:''}<br>Staff: ${e.staffInitials}`
+        });
+    });
+
+    // Tests
+    DB.testing.filter(t => t.participantID === p.id).forEach(t => {
+        events.push({
+            type: 'test',
+            icon: '🧪',
+            color: '#e67e22',
+            title: `${t.testType} Test`,
+            date: new Date(t.testDate),
+            detail: `Result: <strong>${t.result}</strong> · Treatment: ${t.treatmentStarted}${t.notes?`<br>Notes: ${t.notes}`:''}`
+        });
+    });
+
+    // Referrals
+    DB.referrals.filter(r => r.participantID === p.id).forEach(r => {
+        events.push({
+            type: 'referral',
+            icon: '🔗',
+            color: '#8e44ad',
+            title: `Referral — ${r.referralTo}`,
+            date: new Date(r.referralDate),
+            detail: `Service: ${r.serviceType} · Linked: ${r.linkedSuccessfully}${r.notes?`<br>Notes: ${r.notes}`:''}`
+        });
+    });
+
+    // Kit distributions
+    DB.kitDistributions.filter(k => k.participantID === p.id).forEach(k => {
+        events.push({
+            type: 'kit',
+            icon: '📦',
+            color: '#2980b9',
+            title: `${k.kitType} — ${k.kitName}`,
+            date: new Date(k.dateTime),
+            detail: `Quantity: ${k.quantity}${k.notes?`<br>Notes: ${k.notes}`:''}<br>Staff: ${k.staffInitials}`
+        });
+    });
+
+    // Sort newest first
+    events.sort((a,b) => b.date - a.date);
+
+    const el = document.getElementById('profileTimeline');
+    if (!events.length) { el.innerHTML = '<p class="no-results">No activity yet.</p>'; return; }
+    el.innerHTML = events.map(ev => `
+        <div class="timeline-event">
+            <div class="timeline-dot" style="background:${ev.color}">${ev.icon}</div>
+            <div class="timeline-body">
+                <div class="timeline-header">
+                    <strong>${ev.title}</strong>
+                    <span class="timeline-date">${ev.date.toLocaleDateString()} ${ev.date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+                </div>
+                <div class="timeline-detail">${ev.detail}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function buildEnrollmentDetail(p) {
+    const el = document.getElementById('profileEnrollmentDetail');
+    const enrollDate = new Date(p.enrollmentDate);
+    el.innerHTML = `
+        <div class="enrollment-detail-card">
+            <div class="ed-row"><span class="ed-label">Enrollment Date</span><span class="ed-value">${enrollDate.toLocaleDateString()} at ${enrollDate.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>
+            <div class="ed-row"><span class="ed-label">Participant ID</span><span class="ed-value mono">${p.id}</span></div>
+            <div class="ed-row"><span class="ed-label">Date of Birth</span><span class="ed-value">${p.dob || '—'}</span></div>
+            <div class="ed-row"><span class="ed-label">Phone</span><span class="ed-value">${p.phone || '—'}</span></div>
+            <div class="ed-row"><span class="ed-label">Agreement Signed</span><span class="ed-value">${p.agreementSigned ? '✅ Yes' : '❌ No'}</span></div>
+            <div class="ed-row"><span class="ed-label">Status</span><span class="ed-value">${p.status}</span></div>
+            <div class="ed-row"><span class="ed-label">Services Interested</span><span class="ed-value">${(p.servicesInterested||[]).join(', ')||'None'}</span></div>
+            <div class="ed-row"><span class="ed-label">RFID Keychain</span><span class="ed-value">${p.rfidAssigned ? '🔑 Assigned' : '⚠️ Not assigned'}</span></div>
+            ${(p.enrollmentItems||[]).length ? `<div class="ed-row"><span class="ed-label">Items Given at Enrollment</span><span class="ed-value">${p.enrollmentItems.map(i=>`${i.name} ×${i.qty}`).join('<br>')}</span></div>` : ''}
         </div>
     `;
-    
-    // Summary Statistics
-    html += `
-        <div class="report-section">
-            <h3>Program Overview</h3>
-            <table class="summary-table">
-                <tr><td><strong>Total Participants Enrolled</strong></td><td>${DB.participants.length} / 75 (${Math.round((DB.participants.length/75)*100)}%)</td></tr>
-                <tr><td><strong>Total Encounters</strong></td><td>${DB.encounters.length}</td></tr>
-                <tr><td><strong>Needles Distributed</strong></td><td>${DB.encounters.reduce((sum, e) => sum + (e.needlesOut || 0), 0).toLocaleString()} / 50,000</td></tr>
-                <tr><td><strong>Needles Returned</strong></td><td>${DB.encounters.reduce((sum, e) => sum + (e.needlesIn || 0), 0).toLocaleString()} / 75,000</td></tr>
-                <tr><td><strong>HIV Tests Completed</strong></td><td>${DB.testing.filter(t => t.testType === 'HIV').length} / 25</td></tr>
-                <tr><td><strong>HCV Tests Completed</strong></td><td>${DB.testing.filter(t => t.testType === 'HCV').length} / 25</td></tr>
-                <tr><td><strong>Total Referrals Made</strong></td><td>${DB.referrals.length}</td></tr>
-                <tr><td><strong>Referrals Successfully Linked</strong></td><td>${DB.referrals.filter(r => r.linkedSuccessfully === 'Yes').length}</td></tr>
-            </table>
-        </div>
-    `;
-    
-    // Kit Distributions
-    html += `
-        <div class="report-section">
-            <h3>Kit Distribution Summary</h3>
-            <table class="summary-table">
-                <tr><th>Kit Type</th><th>Distributed</th><th>Remaining</th></tr>
-    `;
-    
-    Object.keys(DB.kits).forEach(kitKey => {
-        const kit = DB.kits[kitKey];
-        const distributed = kit.starting - kit.current;
-        html += `<tr>
-            <td><strong>${kitKey} - ${kit.name}</strong></td>
-            <td>${distributed}</td>
-            <td>${kit.current}</td>
-        </tr>`;
-    });
-    
-    html += `</table></div>`;
-    
-    // Testing Summary
-    html += `
-        <div class="report-section">
-            <h3>Testing & Treatment Summary</h3>
-            <table class="summary-table">
-                <tr><th>Test Type</th><th>Total Tests</th><th>Positive</th><th>Treatment Started</th></tr>
-    `;
-    
-    ['HIV', 'HCV', 'HBV', 'STD', 'TB'].forEach(testType => {
-        const tests = DB.testing.filter(t => t.testType === testType);
-        const positive = tests.filter(t => t.result === 'Positive').length;
-        const treated = tests.filter(t => t.treatmentStarted === 'Yes').length;
-        
-        if (tests.length > 0) {
-            html += `<tr>
-                <td><strong>${testType}</strong></td>
-                <td>${tests.length}</td>
-                <td>${positive}</td>
-                <td>${treated}</td>
-            </tr>`;
-        }
-    });
-    
-    html += `</table></div>`;
-    
-    // Referral Summary
-    const totalRefs = DB.referrals.length;
-    const linkedRefs = DB.referrals.filter(r => r.linkedSuccessfully === 'Yes').length;
-    const linkageRate = totalRefs > 0 ? Math.round((linkedRefs / totalRefs) * 100) : 0;
-    
-    html += `
-        <div class="report-section">
-            <h3>Referral Linkage Summary</h3>
-            <p><strong>Overall Linkage Rate: ${linkageRate}%</strong> (${linkedRefs} of ${totalRefs} successfully linked)</p>
-            <table class="summary-table">
-                <tr><th>Organization</th><th>Total Referrals</th><th>Successfully Linked</th><th>Linkage Rate</th></tr>
-    `;
-    
-    ['Brightview', 'Horizon Behavioral Health', 'Savidia', 'Other'].forEach(org => {
-        const orgRefs = DB.referrals.filter(r => r.referralTo === org);
-        const orgLinked = orgRefs.filter(r => r.linkedSuccessfully === 'Yes').length;
-        const orgRate = orgRefs.length > 0 ? Math.round((orgLinked / orgRefs.length) * 100) : 0;
-        
-        if (orgRefs.length > 0) {
-            html += `<tr>
-                <td><strong>${org}</strong></td>
-                <td>${orgRefs.length}</td>
-                <td>${orgLinked}</td>
-                <td>${orgRate}%</td>
-            </tr>`;
-        }
-    });
-    
-    html += `</table></div>`;
-    
-    // Inventory Alerts
-    const alerts = generateAlerts();
-    if (alerts.length > 0) {
-        html += `
-            <div class="report-section">
-                <h3>⚠️ Inventory Alerts</h3>
-                <table class="summary-table">
-                    <tr><th>Item</th><th>Current</th><th>Starting</th><th>% Remaining</th><th>Status</th></tr>
-        `;
-        
-        alerts.forEach(alert => {
-            html += `<tr>
-                <td><strong>${alert.item}</strong></td>
-                <td>${alert.current}</td>
-                <td>${alert.starting}</td>
-                <td>${alert.percent}%</td>
-                <td><span class="status-badge ${alert.level}">${alert.message}</span></td>
-            </tr>`;
-        });
-        
-        html += `</table></div>`;
-    }
-    
-    if (reportType === 'full') {
-        // Add participant list
-        html += `
-            <div class="report-section">
-                <h3>Participant List</h3>
-                <table class="summary-table">
-                    <tr><th>ID</th><th>Name</th><th>Enrollment Date</th><th>Encounters</th></tr>
-        `;
-        
-        DB.participants.forEach(p => {
-            const encounters = DB.encounters.filter(e => e.participantID === p.id).length;
-            html += `<tr>
-                <td>${p.id}</td>
-                <td>${p.firstName} ${p.lastName}</td>
-                <td>${new Date(p.enrollmentDate).toLocaleDateString()}</td>
-                <td>${encounters}</td>
-            </tr>`;
-        });
-        
-        html += `</table></div>`;
-    }
-    
-    return html;
 }
 
-function exportReportPDF() {
-    const reportContent = document.getElementById('reportOutput').innerHTML;
-    
-    if (!reportContent || reportContent.includes('Select a report type')) {
-        alert('⚠️ Please generate a report first before exporting to PDF!');
-        return;
-    }
-    
-    // Create print window
-    const printWindow = window.open('', '', 'height=800,width=1000');
-    
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>CHR Report - ${new Date().toLocaleDateString()}</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 40px;
-                    color: #333;
-                    font-size: 12px;
-                }
-                h1, h2 {
-                    color: #2c3e50;
-                    border-bottom: 3px solid #3498db;
-                    padding-bottom: 10px;
-                }
-                h3 {
-                    color: #34495e;
-                    margin-top: 30px;
-                    border-bottom: 2px solid #95a5a6;
-                    padding-bottom: 5px;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 20px 0;
-                }
-                th {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 10px;
-                    text-align: left;
-                    border: 1px solid #2980b9;
-                }
-                td {
-                    padding: 8px;
-                    border: 1px solid #ddd;
-                }
-                tr:nth-child(even) {
-                    background-color: #f9f9f9;
-                }
-                .report-section {
-                    margin-bottom: 30px;
-                    page-break-inside: avoid;
-                }
-                .report-header {
-                    text-align: center;
-                    margin-bottom: 30px;
-                }
-                .status-badge {
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 11px;
-                    font-weight: bold;
-                }
-                .status-badge.critical {
-                    background-color: #e74c3c;
-                    color: white;
-                }
-                .status-badge.low {
-                    background-color: #f39c12;
-                    color: white;
-                }
-                .status-badge.reorder {
-                    background-color: #ff9800;
-                    color: white;
-                }
-                @media print {
-                    body { margin: 20px; }
-                    .report-section { page-break-inside: avoid; }
-                }
-            </style>
-        </head>
-        <body>
-            ${reportContent}
-            <script>
-                window.onload = function() {
-                    window.print();
-                    window.onafterprint = function() {
-                        window.close();
-                    };
-                };
-            </script>
-        </body>
-        </html>
-    `);
-    
-    printWindow.document.close();
-}
-
-// ============================================
-// BACKUP & RESTORE (NEW)
-// ============================================
-
-function backupData() {
-    const backupData = {
-        version: 'Phase 1.0',
-        timestamp: new Date().toISOString(),
-        data: DB,
-        kits: DB.kits,
-        thresholds: THRESHOLDS
+function buildInventoryHistory(p) {
+    const el = document.getElementById('profileInventoryList');
+    // Collect all items given across enrollment + encounters + kits
+    const itemMap = {};
+    const addItem = (name, qty, when, type) => {
+        if (!itemMap[name]) itemMap[name] = {name, total:0, events:[]};
+        itemMap[name].total += qty;
+        itemMap[name].events.push({qty, when, type});
     };
-    
-    const dataStr = JSON.stringify(backupData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    
-    // Create download link
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `CHR_Backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    // Show success message
-    const status = document.getElementById('backupStatus');
-    status.innerHTML = `<div class="alert alert-success">✅ Backup created successfully! File: CHR_Backup_${new Date().toISOString().split('T')[0]}.json</div>`;
-    
-    setTimeout(() => {
-        status.innerHTML = '';
-    }, 5000);
-}
-
-function restoreData(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (!confirm('⚠️ WARNING: This will replace ALL current data with the backup file. Make sure you have a current backup first! Continue?')) {
-        event.target.value = '';
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const backup = JSON.parse(e.target.result);
-            
-            // Validate backup
-            if (!backup.data || !backup.version) {
-                throw new Error('Invalid backup file format');
-            }
-            
-            // Restore data
-            DB.participants = backup.data.participants || [];
-            DB.encounters = backup.data.encounters || [];
-            DB.testing = backup.data.testing || [];
-            DB.referrals = backup.data.referrals || [];
-            DB.kitDistributions = backup.data.kitDistributions || [];
-            DB.inventory = backup.data.inventory || DB.inventory;
-            DB.kits = backup.kits || DB.kits;
-            
-            if (backup.thresholds) {
-                THRESHOLDS = backup.thresholds;
-                localStorage.setItem('alertThresholds', JSON.stringify(THRESHOLDS));
-            }
-            
-            saveData();
-            updateDashboard();
-            
-            const status = document.getElementById('backupStatus');
-            status.innerHTML = `<div class="alert alert-success">✅ Data restored successfully from backup dated ${new Date(backup.timestamp).toLocaleString()}</div>`;
-            
-            setTimeout(() => {
-                status.innerHTML = '';
-            }, 5000);
-            
-        } catch (error) {
-            alert('❌ Error restoring backup: ' + error.message);
-        }
-        
-        event.target.value = '';
-    };
-    
-    reader.readAsText(file);
-}
-
-// ============================================
-// SETTINGS
-// ============================================
-
-function saveThresholds() {
-    THRESHOLDS.critical = parseInt(document.getElementById('criticalThreshold').value);
-    THRESHOLDS.low = parseInt(document.getElementById('lowThreshold').value);
-    THRESHOLDS.reorder = parseInt(document.getElementById('reorderThreshold').value);
-    
-    localStorage.setItem('alertThresholds', JSON.stringify(THRESHOLDS));
-    
-    alert('✅ Alert thresholds saved successfully!');
-    updateDashboard();
-}
-
-function updateSettingsDisplay() {
-    const totalRecords = DB.participants.length + DB.encounters.length + 
-                        DB.testing.length + DB.referrals.length + DB.kitDistributions.length;
-    document.getElementById('totalRecords').textContent = totalRecords;
-}
-
-function clearAllData() {
-    if (!confirm('⚠️ FINAL WARNING: This will permanently delete ALL data including participants, encounters, testing, referrals, and inventory records. This CANNOT be undone! Type "DELETE" to confirm.')) {
-        return;
-    }
-    
-    const confirmation = prompt('Type DELETE in capital letters to confirm:');
-    if (confirmation !== 'DELETE') {
-        alert('Data deletion cancelled.');
-        return;
-    }
-    
-    // Clear all data
-    DB.participants = [];
-    DB.encounters = [];
-    DB.testing = [];
-    DB.referrals = [];
-    DB.kitDistributions = [];
-    
-    // Reset inventory to starting values
-    DB.inventory.forEach(item => {
-        item.current = item.starting;
+    (p.enrollmentItems||[]).forEach(i => addItem(i.name, i.qty, new Date(p.enrollmentDate), 'Enrollment'));
+    DB.encounters.filter(e => e.participantID === p.id).forEach(e => {
+        if (e.needlesOut)    addItem('Needles/Syringes', e.needlesOut, new Date(e.dateTime), 'Encounter');
+        if (e.naloxoneGiven) addItem('4mg Naloxone Nasal Spray', e.naloxoneGiven, new Date(e.dateTime), 'Encounter');
+        if (e.condomsGiven)  addItem('Lifestyle Normal Condoms', e.condomsGiven, new Date(e.dateTime), 'Encounter');
+        (e.additionalItems||[]).forEach(ai => addItem(ai.name, ai.qty, new Date(e.dateTime), 'Encounter'));
     });
-    
-    // Reset kits
-    DB.kits = JSON.parse(JSON.stringify(KITS));
-    
-    localStorage.clear();
-    saveData();
-    updateDashboard();
-    
-    alert('✅ All data has been cleared.');
-    showView('dashboard');
+    DB.kitDistributions.filter(k => k.participantID === p.id).forEach(k => {
+        const kitItems = KITS[k.kitType] ? KITS[k.kitType].items : {};
+        Object.keys(kitItems).forEach(name => addItem(name, kitItems[name]*k.quantity, new Date(k.dateTime), `Kit: ${k.kitType}`));
+    });
+    if (!Object.keys(itemMap).length) { el.innerHTML = '<p class="no-results">No items recorded.</p>'; return; }
+    const items = Object.values(itemMap).sort((a,b) => b.total - a.total);
+    el.innerHTML = `
+        <div class="inv-history-summary">Total unique items: ${items.length}</div>
+        ${items.map(item => `
+            <div class="inv-history-item">
+                <div class="inv-history-header">
+                    <strong>${item.name}</strong>
+                    <span class="inv-history-total">${item.total} total</span>
+                </div>
+                <div class="inv-history-events">
+                    ${item.events.map(ev => `<span class="inv-event-chip">${ev.type} · ×${ev.qty} · ${ev.when.toLocaleDateString()}</span>`).join('')}
+                </div>
+            </div>
+        `).join('')}
+    `;
 }
 
-// ============================================
-// SERVICE WORKER (For offline capability)
-// ============================================
-
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-        .then(reg => console.log('Service Worker registered'))
-        .catch(err => console.log('Service Worker registration failed:', err));
-}
-
-// ============================================
-// NFC/RFID KEYCHAIN FUNCTIONALITY
-// ============================================
-
+// ── NFC / RFID ────────────────────────────────────────────────
 let ndefReader = null;
-
-// Initialize NFC reader when app loads (if available)
-if ('NDEFReader' in window) {
-    ndefReader = new NDEFReader();
-    console.log('NFC Reader available');
-    
-    // Add NFC scan button to dashboard if not already there
-    window.addEventListener('DOMContentLoaded', () => {
-        addNFCScanButton();
-    });
-}
-
-function addNFCScanButton() {
-    // Check if button already exists
-    if (document.getElementById('nfcScanBtn')) return;
-    
-    // Add NFC scan button to dashboard
-    const dashboard = document.getElementById('dashboard');
-    if (dashboard) {
-        const menuGrid = dashboard.querySelector('.menu-grid');
-        if (menuGrid) {
-            const nfcButton = document.createElement('button');
-            nfcButton.id = 'nfcScanBtn';
-            nfcButton.className = 'menu-btn primary';
-            nfcButton.innerHTML = '📱 Scan RFID Keychain';
-            nfcButton.onclick = () => startNFCScan();
-            menuGrid.insertBefore(nfcButton, menuGrid.children[2]); // Insert after "Log Encounter"
-        }
-    }
-}
+if ('NDEFReader' in window) ndefReader = new NDEFReader();
 
 async function startNFCScan() {
-    if (!ndefReader) {
-        alert('⚠️ NFC is not supported on this device.\n\nPlease use a device with NFC capability (most iPads support this).');
-        return;
-    }
-    
+    if (!ndefReader) { alert('⚠️ NFC is not supported on this device.\nPlease use iPad Pro 2018+, iPad Air 2019+, or iPad mini 2019+.'); return; }
     try {
         await ndefReader.scan();
-        
-        alert('🔍 NFC Scanner Ready!\n\nHold the participant\'s keychain near the top of the iPad...');
-        
+        alert('🔍 NFC Ready — Hold the participant\'s keychain near the top of the iPad.');
         ndefReader.onreading = event => {
-            const message = event.message;
-            
-            // Read the participant ID from the tag
-            for (const record of message.records) {
+            for (const record of event.message.records) {
                 if (record.recordType === 'text') {
-                    const textDecoder = new TextDecoder(record.encoding);
-                    const participantID = textDecoder.decode(record.data);
-                    
-                    // Look up participant
-                    const participant = DB.participants.find(p => p.id === participantID);
-                    
-                    if (participant) {
-                        // Success! Show participant info
-                        alert(`✅ Participant Found!\n\nID: ${participantID}\nName: ${participant.firstName} ${participant.lastName}\n\nClick OK to log an encounter.`);
-                        
-                        // Auto-fill encounter form
-                        showView('encounter');
-                        document.getElementById('encounterParticipant').value = participantID;
-                        
-                        // Update RFID info if serial number available
-                        if (event.serialNumber && !participant.rfidSerialNumber) {
-                            participant.rfidSerialNumber = event.serialNumber;
-                            participant.rfidAssigned = true;
-                            saveData();
-                        }
+                    const id = new TextDecoder(record.encoding).decode(record.data);
+                    const p = DB.participants.find(pt => pt.id === id);
+                    if (p) {
+                        showView('participantHub');
+                        setTimeout(() => openParticipantProfile(id), 200);
                     } else {
-                        alert(`❌ Participant Not Found\n\nID on keychain: ${participantID}\n\nThis ID is not in the system. Please check with staff.`);
+                        alert(`❌ ID not found: ${id}`);
                     }
-                    
                     break;
                 }
             }
         };
-        
-        ndefReader.onreadingerror = () => {
-            alert('❌ Error reading NFC tag.\n\nPlease try again or contact staff.');
+    } catch(err) { alert(`❌ NFC Error: ${err.message}`); }
+}
+
+async function startHubNFCScan() {
+    if (!ndefReader) { alert('⚠️ NFC not supported on this device.'); return; }
+    try {
+        await ndefReader.scan();
+        alert('🔍 NFC Ready — Hold keychain near the top of the iPad.');
+        ndefReader.onreading = event => {
+            for (const record of event.message.records) {
+                if (record.recordType === 'text') {
+                    const id = new TextDecoder(record.encoding).decode(record.data);
+                    const p = DB.participants.find(pt => pt.id === id);
+                    if (p) { openParticipantProfile(id); }
+                    else   { alert(`❌ Participant not found: ${id}`); }
+                    break;
+                }
+            }
         };
-        
-    } catch (error) {
-        console.error('NFC scan error:', error);
-        alert(`❌ NFC Error: ${error.message}\n\nPlease try again or contact IT support.`);
-    }
+    } catch(err) { alert(`❌ NFC Error: ${err.message}`); }
 }
 
 async function writeParticipantIDToNFC(participantID) {
-    if (!ndefReader) {
-        alert('⚠️ NFC writing is not supported on this device.');
-        return;
-    }
-    
+    if (!ndefReader) { alert('⚠️ NFC writing not supported.'); return; }
     try {
-        alert(`📝 NFC Writer Ready!\n\nWriting ID: ${participantID}\n\nHold a BLANK keychain tag near the top of the iPad...\n\n⚠️ Make sure the tag is completely blank and has never been written to!`);
-        
-        await ndefReader.write({
-            records: [
-                {
-                    recordType: "text",
-                    data: participantID
-                },
-                {
-                    recordType: "text",
-                    data: `CHR Program Participant - Community Access Network`
-                }
-            ]
+        alert(`📝 NFC Writer Ready\nWriting ID: ${participantID}\n\nHold a BLANK NTAG215 keychain near the top of the iPad...`);
+        await ndefReader.write({ records: [{ recordType:'text', data: participantID }] });
+        try { await ndefReader.makeReadOnly(); alert(`✅ Keychain Programmed!\nID: ${participantID}\n🔒 Tag locked — give to participant.`); }
+        catch { alert(`✅ Keychain Programmed!\nID: ${participantID}\n⚠️ This tag type cannot be permanently locked.`); }
+        const p = DB.participants.find(pt => pt.id === participantID);
+        if (p) { p.rfidAssigned = true; saveData(); }
+    } catch(err) { alert(`❌ Write Error: ${err.message}`); }
+}
+
+function setupRFIDForm() {
+    const form = document.getElementById('rfidWriteForm');
+    if (form._listenerAdded) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const id = document.getElementById('rfidParticipantSelect').value;
+        if (id) writeParticipantIDToNFC(id);
+        else alert('Please select a participant first.');
+    });
+    form._listenerAdded = true;
+}
+
+function displayRFIDStats() {
+    const total    = DB.participants.length;
+    const assigned = DB.participants.filter(p => p.rfidAssigned).length;
+    const rate     = total ? Math.round((assigned/total)*100) : 0;
+    const el = document.getElementById('rfidStatsDisplay');
+    el.innerHTML = `
+        <div class="stats-grid">
+            <div class="stat-card"><h3>Total Participants</h3><p class="stat-number">${total}</p></div>
+            <div class="stat-card"><h3>RFID Assigned</h3><p class="stat-number">${assigned}</p></div>
+            <div class="stat-card"><h3>Unassigned</h3><p class="stat-number">${total-assigned}</p></div>
+            <div class="stat-card"><h3>Assignment Rate</h3><p class="stat-number">${rate}%</p></div>
+        </div>
+        ${total-assigned>0 ? `<div class="alert alert-warning" style="margin-top:15px;"><strong>⚠️ ${total-assigned} participant(s) need RFID keychains</strong></div>` : ''}
+    `;
+}
+
+// ── Reports ───────────────────────────────────────────────────
+function generateReport(type) {
+    document.getElementById('reportOutput').innerHTML = generateReportContent(type);
+}
+function generateReportContent(type) {
+    let html = `<div class="report-header"><h2>CHR Program Report</h2><p>Generated: ${new Date().toLocaleString()}</p></div>`;
+    html += `<div class="report-section"><h3>Program Overview</h3><table class="summary-table">
+        <tr><td><strong>Participants Enrolled</strong></td><td>${DB.participants.length} / 75</td></tr>
+        <tr><td><strong>Total Encounters</strong></td><td>${DB.encounters.length}</td></tr>
+        <tr><td><strong>Needles Distributed</strong></td><td>${DB.encounters.reduce((s,e)=>s+(e.needlesOut||0),0).toLocaleString()} / 50,000</td></tr>
+        <tr><td><strong>Needles Returned</strong></td><td>${DB.encounters.reduce((s,e)=>s+(e.needlesIn||0),0).toLocaleString()} / 75,000</td></tr>
+        <tr><td><strong>HIV Tests</strong></td><td>${DB.testing.filter(t=>t.testType==='HIV').length} / 25</td></tr>
+        <tr><td><strong>HCV Tests</strong></td><td>${DB.testing.filter(t=>t.testType==='HCV').length} / 25</td></tr>
+        <tr><td><strong>Total Referrals</strong></td><td>${DB.referrals.length}</td></tr>
+        <tr><td><strong>Referrals Linked</strong></td><td>${DB.referrals.filter(r=>r.linkedSuccessfully==='Yes').length}</td></tr>
+    </table></div>`;
+    const alerts = generateAlerts();
+    if (alerts.length) {
+        html += `<div class="report-section"><h3>⚠️ Inventory Alerts</h3><table class="summary-table"><tr><th>Item</th><th>Current</th><th>%</th><th>Status</th></tr>`;
+        alerts.forEach(a => html += `<tr><td>${a.item}</td><td>${a.current}/${a.starting}</td><td>${a.percent}%</td><td><span class="status-badge ${a.level}">${a.message}</span></td></tr>`);
+        html += '</table></div>';
+    }
+    if (type === 'full') {
+        html += `<div class="report-section"><h3>Participants</h3><table class="summary-table"><tr><th>ID</th><th>Name</th><th>Enrolled</th><th>Encounters</th></tr>`;
+        DB.participants.forEach(p => {
+            const enc = DB.encounters.filter(e => e.participantID===p.id).length;
+            html += `<tr><td>${p.id}</td><td>${p.firstName} ${p.lastName}</td><td>${new Date(p.enrollmentDate).toLocaleDateString()}</td><td>${enc}</td></tr>`;
         });
-        
-        // After successful write, try to lock the tag (optional, depends on tag type)
+        html += '</table></div>';
+    }
+    return html;
+}
+function exportReportPDF() {
+    const content = document.getElementById('reportOutput').innerHTML;
+    if (!content || content.includes('Select a report')) { alert('Generate a report first!'); return; }
+    const w = window.open('','','height=800,width=1000');
+    w.document.write(`<!DOCTYPE html><html><head><title>CHR Report</title><style>body{font-family:Arial;margin:40px;font-size:12px;}table{width:100%;border-collapse:collapse;}th{background:#3498db;color:white;padding:10px;text-align:left;}td{padding:8px;border-bottom:1px solid #ddd;}.status-badge.critical{background:#e74c3c;color:white;padding:3px 8px;border-radius:4px;}.status-badge.low{background:#f39c12;color:white;padding:3px 8px;border-radius:4px;}</style></head><body>${content}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script></body></html>`);
+    w.document.close();
+}
+
+// ── Settings ──────────────────────────────────────────────────
+function saveThresholds() {
+    THRESHOLDS.critical = parseInt(document.getElementById('criticalThreshold').value);
+    THRESHOLDS.low      = parseInt(document.getElementById('lowThreshold').value);
+    THRESHOLDS.reorder  = parseInt(document.getElementById('reorderThreshold').value);
+    localStorage.setItem('alertThresholds', JSON.stringify(THRESHOLDS));
+    alert('✅ Alert thresholds saved!');
+    updateDashboard();
+}
+function updateSettingsDisplay() {
+    const total = DB.participants.length + DB.encounters.length + DB.testing.length + DB.referrals.length + DB.kitDistributions.length;
+    document.getElementById('totalRecords').textContent = total;
+}
+function backupData() {
+    const backup = { version:'1.1', timestamp:new Date().toISOString(), data:DB, thresholds:THRESHOLDS };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));
+    const a = document.createElement('a');
+    a.href = url; a.download = `CHR_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    document.getElementById('backupStatus').innerHTML = '<div class="alert alert-success">✅ Backup created!</div>';
+    setTimeout(() => document.getElementById('backupStatus').innerHTML='', 4000);
+}
+function restoreData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!confirm('⚠️ This will replace ALL current data. Continue?')) { event.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
         try {
-            await ndefReader.makeReadOnly();
-            alert(`✅ RFID Keychain Programmed Successfully!\n\nParticipant ID: ${participantID}\n\n🔒 Tag has been locked to prevent accidental overwrites.\n\nGive this keychain to the participant and instruct them to:\n• Keep it on their person at all times\n• Tap it to the iPad when they visit\n• Report lost keychains immediately for replacement`);
-        } catch (lockError) {
-            // Some tags don't support locking - that's okay
-            alert(`✅ RFID Keychain Programmed Successfully!\n\nParticipant ID: ${participantID}\n\n⚠️ Note: This tag type does not support permanent locking. Handle with care.\n\nGive this keychain to the participant and instruct them to:\n• Keep it on their person at all times\n• Tap it to the iPad when they visit\n• Report lost keychains immediately for replacement`);
-        }
-        
-        // Update participant record
-        const participant = DB.participants.find(p => p.id === participantID);
-        if (participant) {
-            participant.rfidAssigned = true;
-            saveData();
-        }
-        
-    } catch (error) {
-        console.error('NFC write error:', error);
-        
-        if (error.name === 'NotAllowedError') {
-            alert('❌ Permission Denied\n\nPlease allow NFC access when prompted.');
-        } else if (error.name === 'NotSupportedError') {
-            alert('❌ Not Supported\n\nThis tag type is not compatible. Please use NTAG215 or similar NFC tags.');
-        } else if (error.name === 'NotReadableError') {
-            alert('❌ Tag Not Readable\n\nThe tag may be damaged, already locked, or not blank. Try a different tag.');
-        } else {
-            alert(`❌ Write Error: ${error.message}\n\nPlease try again with a blank NTAG215 tag.`);
-        }
-    }
+            const backup = JSON.parse(e.target.result);
+            if (!backup.data) throw new Error('Invalid backup format');
+            DB.participants     = backup.data.participants     || [];
+            DB.encounters       = backup.data.encounters       || [];
+            DB.testing          = backup.data.testing          || [];
+            DB.referrals        = backup.data.referrals        || [];
+            DB.kitDistributions = backup.data.kitDistributions || [];
+            DB.inventory        = backup.data.inventory        || DB.inventory;
+            DB.kits             = backup.data.kits             || DB.kits;
+            if (backup.thresholds) { THRESHOLDS = backup.thresholds; localStorage.setItem('alertThresholds',JSON.stringify(THRESHOLDS)); }
+            saveData(); updateDashboard();
+            document.getElementById('backupStatus').innerHTML = `<div class="alert alert-success">✅ Restored from ${new Date(backup.timestamp).toLocaleString()}</div>`;
+        } catch(err) { alert('❌ Restore error: ' + err.message); }
+        event.target.value = '';
+    };
+    reader.readAsText(file);
+}
+function clearAllData() {
+    if (!confirm('⚠️ This will permanently delete ALL data. Continue?')) return;
+    if (prompt('Type DELETE to confirm:') !== 'DELETE') { alert('Cancelled.'); return; }
+    DB.participants=[]; DB.encounters=[]; DB.testing=[]; DB.referrals=[]; DB.kitDistributions=[];
+    DB.inventory = DEFAULT_INVENTORY.map(i => ({...i, current:i.starting, min:Math.ceil(i.starting*0.2), photo:null, custom:false}));
+    DB.kits = JSON.parse(JSON.stringify(KITS));
+    localStorage.clear(); saveData(); updateDashboard();
+    alert('✅ All data cleared.'); showView('dashboard');
 }
 
-// Add manual RFID write function for existing participants
-function showRFIDWriteDialog() {
-    showView('rfidManage');
-    populateParticipantDropdown('rfidParticipantSelect');
-}
-
-// Add this to your setupEventListeners function
-function setupRFIDEventListeners() {
-    const rfidWriteForm = document.getElementById('rfidWriteForm');
-    if (rfidWriteForm) {
-        rfidWriteForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const participantID = document.getElementById('rfidParticipantSelect').value;
-            if (participantID) {
-                writeParticipantIDToNFC(participantID);
-            } else {
-                alert('Please select a participant first.');
-            }
-        });
-    }
+// ── Service Worker ────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 }
